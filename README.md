@@ -148,7 +148,7 @@ WebMobileClone/
 ```powershell
 cd E:\plan\test29\WebMobileClone
 npm run build                   # 先构建 dist/
-npm run test:unit               # 核心逻辑单测：156 passed, 0 failed
+npm run test:unit               # 核心逻辑单测：159 passed, 0 failed
 npm run test:e2e                # 浏览器端到端：182 passed, 0 failed（需先起 8900 服务）
 # 或：npm test                  # 两个一起跑
 ```
@@ -363,10 +363,13 @@ Protocol 直接驱动真实浏览器点击并断言，不依赖 puppeteer/playwr
 
 ## 九、与原版的数据互通（实测，不是推导）
 
-结论：**字段、键序、路点矩阵、实体属性全部一致，四种地图都能双向导入。**
+结论：**字段、键序、路点矩阵、实体属性全部一致；四种地图、三种格子尺寸、双向导入
+得到的 `JSON.stringify()` 文本逐字节相同。** 唯一的例外是 `type: "item"`（见 9.5），
+而那正是原版自己也读不回来的一种实体。
+
 验证方式是真的跑一遍：克隆导出 → 原版 `initMapData()` 导入 → 原版
 `getRoadPointInfo()` + `unitDataConversion()` 导出 → 克隆 `WMLoadData()` 导入 → 再导出，
-三份 JSON 逐字段对比。
+每个环节都拿 `JSON.stringify()` 的整串文本做比较，而不是逐字段“看起来一样”。
 
 ### 9.1 顶层 12 个字段
 
@@ -425,12 +428,41 @@ var c = mapType == MapType.angle45 ? 2 * i : i;   // i = MapRoadUtils.row
 
 ### 9.4 双向导入实测结果
 
-| 地图类型 | 克隆导出 | 原版导入后再导出 | 克隆再导入再导出 | 路点/实体 |
-| --- | --- | --- | --- | --- |
-| angle45 | 168×48 | 168×48 | 168×48 | 一致 |
-| angle90 | 42×48 | 42×48 | 42×48 | 一致 |
-| honeycomb | 42×64 | 42×64 | 42×64 | 一致 |
-| honeycomb2 | 48×55 | 48×55 | 48×55 | 一致 |
+判据不是“字段值相等”，而是 **`JSON.stringify()` 出来的整串字节相等** —— 连键序、数字的
+`34.64` 写法、数组换行都不许差。只要整串相同，任何 JSON 解析器读到的就是同一份数据。
+
+正方向（克隆导出 → 原版 `initRoadPointInfo()`/`initMapUintInfo()` → 原版 `getMapData()` 等价物）：
+
+| 地图类型 | rows×cols（克隆/原版） | 整串 JSON | 字节数 |
+| --- | --- | --- | --- |
+| angle45 | 168×48 / 168×48 | **相同** | 17372 / 17372 |
+| angle90 | 42×48 / 42×48 | **相同** | 5024 / 5024 |
+| honeycomb | 42×64 / 42×64 | **相同** | 6368 / 6368 |
+| honeycomb2 | 48×55 / 48×55 | **相同** | 6284 / 6284 |
+
+反方向（原版导出的 JSON 原文 → 克隆 `WMLoadData()` → 克隆再导出）也是**整串相同**，四种地图全过。
+
+### 9.4.1 几何扫描（24 组，0 处不一致）
+
+只测一组尺寸容易漏掉“行数公式只在某个尺寸下凑巧相等”。所以按
+`4 种地图类型 × 3 组格子尺寸 × 有内容/空图` 跑了 24 组，每组都做整串比对：
+
+| 尺寸 | 地图 | rows×cols | 整串 |
+| --- | --- | --- | --- |
+| 1920×1080 @ 60×30 | angle45 | 144×32 | 相同 |
+| 1920×1080 @ 60×30 | angle90 | 36×32 | 相同 |
+| 1920×1080 @ 60×30 | honeycomb | 36×44 | 相同 |
+| 1920×1080 @ 60×30 | honeycomb2 | 24×64 | 相同 |
+| 1920×1440 @ 40×34.64 | angle45 | 168×48 | 相同 |
+| 1920×1440 @ 40×34.64 | angle90 | 42×48 | 相同 |
+| 1920×1440 @ 40×34.64 | honeycomb | 42×64 | 相同 |
+| 1920×1440 @ 40×34.64 | honeycomb2 | 48×55 | 相同 |
+| 1600×1200 @ 50×43.3 | angle45 | 112×32 | 相同 |
+| 1600×1200 @ 50×43.3 | angle90 | 28×32 | 相同 |
+| 1600×1200 @ 50×43.3 | honeycomb | 28×44 | 相同 |
+| 1600×1200 @ 50×43.3 | honeycomb2 | 32×37 | 相同 |
+
+（每行都有对应的“空图”版本，同样整串相同。）
 
 ### 9.5 两个已知的边界（原版就如此，不是克隆缺失）
 
@@ -440,7 +472,17 @@ var c = mapType == MapType.angle45 ? 2 * i : i;   // i = MapRoadUtils.row
   克隆选择在画笔层就拒绝越界格子（`paintAt` 边界检查）—— 宁可画不上，也不生成“看得见但存不下”的数据。
 - **`type: "item"` 的实体原版导入不了**。`initMapUintInfo()` 只处理
   npc / monster / transfer / spawnPoint，其他类型 `i` 保持 `undefined`，`initUnit(undefined, a)` 直接返回。
-  克隆会保留它们（可以当作附加数据），但不会主动产生这种实体。
+  原版 `unitDataConversion()` 的 `else` 分支也只写四个字段（实测）：
+
+  ```json
+  {"type":"item","x":123,"y":456,"width":0,"height":0}
+  ```
+
+  也就是说原版对 `item` 是「导得出、读不回」。克隆导入后会按 `classDic` 的基类属性规范化，
+  再导出会变成 `{type,objId,objName,objType,skin,x,y,cx,cy,params,width,height}` ——
+  `x/y/width/height` 一个不丢，只是多了基类字段。这是**唯一**一处整串字节不相等的情况，
+  而且原版本来就会把这种实体丢掉，所以不影响互通。
+  克隆自己不会产生 `item`（新建只有 npc / monster / transfer / spawnPoint 四种）。
 
 ### 9.6 面向交互的测试钩子
 

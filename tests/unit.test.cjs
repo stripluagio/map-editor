@@ -349,5 +349,44 @@ console.log('== buildMapData 字段与顺序 ==');
      JSON.stringify(again) === JSON.stringify(d), true);
 }
 
+console.log('== 序列化文本（键序 + 数字写法）逐字符 ==');
+{
+  // 原版 getMapData() 的产物是 `JSON.stringify(new MapData())`，所以键序就是构造函数
+  // 的赋值顺序，数字也按 JS 默认写法落盘。这里把两段文本钉死，防止有人调换字段顺序、
+  // 或把 `34.64` 写成 `34.640000000001` 而让原版读到的数值发生偏移。
+  const params = new C.MapParamsModel({
+    name: 'g', mapType: C.MapType.angle90, mapWidth: 200, mapHeight: 100,
+    ceilWidth: 20, ceilHeight: 10,
+  });
+  const road = [];
+  for (let y = 0; y < 10; y++) road.push(new Array(10).fill(1));
+  road[0][0] = 0;
+  const ents = [{
+    type: 'npc', className: 'EditorNPC', objId: '1', objName: 'N', objType: '2', skin: '1',
+    x: 30.5, y: 40.25, cx: 1, cy: 4, params: '', direction: 5, npcType: 1, isPatrol: true,
+    dialogueId: 1, taskId: 2, funcId: 3,
+  }];
+  const text = JSON.stringify(C.buildMapData(params, road, ents, C.defaultSettings()));
+  const cut = text.indexOf('"roadDataArr"');
+  eq('head text (name..offsetY)',
+     text.slice(0, cut),
+     '{"name":"g","bgName":"map_bg","type":1,"mapWidth":200,"mapHeight":100,' +
+     '"nodeWidth":20,"nodeHeight":10,"alignment":0,"offsetX":0,"offsetY":0,');
+  eq('tail text (mapItems)',
+     text.slice(text.indexOf('"mapItems"')),
+     '"mapItems":[{"type":"npc","objId":"1","objName":"N","objType":"2","skin":"1",' +
+     '"x":30.5,"y":40.25,"cx":1,"cy":4,"params":"","direction":5,"npcType":1,' +
+     '"isPatrol":true,"dialogueId":1,"taskId":2,"funcId":3}]}');
+  // 34.64 这种非整数格子高度必须原样落盘
+  const p2 = new C.MapParamsModel({
+    name: 'g', mapType: C.MapType.angle45, mapWidth: 1920, mapHeight: 1440,
+    ceilWidth: 40, ceilHeight: 34.64,
+  });
+  const r2 = []; for (let y = 0; y < 168; y++) r2.push(new Array(48).fill(1));
+  const t2 = JSON.stringify(C.buildMapData(p2, r2, [], C.defaultSettings()));
+  ok('ceilHeight 34.64 serialises literally',
+     t2.indexOf('"nodeHeight":34.64,') > 0, t2.slice(0, 200));
+}
+
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
