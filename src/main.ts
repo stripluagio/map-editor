@@ -7,8 +7,9 @@ import { ENTITY_SKINS, entitySize, entityRing } from './core/constants';
 import { state, exposeGlobals } from './app/state';
 import { fitStage, bindMapInput } from './app/input';
 import { createSampleMap, initDocument } from './app/document';
-import { MapParamsModel } from './core/model';
-import type { MapParams } from './core/types';
+import { paintAt } from './app/editing';
+import { MapParamsModel, normalizeEntity } from './core/model';
+import type { MapParams, MapItem, MapData } from './core/types';
 import { action } from './app/actions';
 import { bindKeyboard } from './app/shortcuts';
 import { bindTest } from './app/playmode';
@@ -17,7 +18,7 @@ import { buildToolBars } from './ui/toolbars';
 import { buildMenus, closeMenu } from './ui/menus';
 import { updateToolPanel } from './ui/toolpanel';
 import { buildPropertyPanel } from './ui/property';
-import { bindNewMap, bindOpenMap } from './ui/wizard';
+import { bindNewMap, bindOpenMap, paramsFromMapData } from './ui/wizard';
 import { bindViews } from './ui/views';
 import { bindOverlay } from './ui/overlay';
 import { render, resizeCanvas } from './render/canvas';
@@ -80,6 +81,26 @@ function init(): void {
     WMCore: { entitySize, entityRing },
     /** Test seam: build a fresh document of any map type (used by tests/e2e.cjs). */
     WMNewMap: (o: Partial<MapParams>) => initDocument(new MapParamsModel(o), null),
+    /**
+     * Test seam: paint one cell by map pixel. Same call shape as `input.ts`
+     * (`paintAt(getNodeByPixel(...), value)`), so probes can exercise the real
+     * brush path — including the out-of-bounds guard — without a mouse.
+     */
+    WMPaintAtPixel: (px: number, py: number, value: number) =>
+      paintAt(state.geom.getNodeByPixel(px, py), value),
+    /**
+     * Test seam: load a MapData JSON exactly like 文件 → 打开 does
+     * (same `paramsFromMapData` path, so a probe can't drift from the UI).
+     */
+    WMLoadData: (d: Partial<MapData>) => {
+      initDocument(paramsFromMapData(d as Record<string, unknown>), d);
+      return getMapData()!.toJson();
+    },
+    /** Test seam: append a normalized entity (used by tests + interop probes). */
+    WMAddEntity: (o: Partial<MapItem>) => {
+      state.entities.push(normalizeEntity(o));
+      render();
+    },
   });
 }
 

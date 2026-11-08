@@ -334,3 +334,94 @@ Protocol 直接驱动真实浏览器点击并断言，不依赖 puppeteer/playwr
   窗口越窄越明显，线条和文字都会发虚。原版是让 WebGL 后备缓冲直接等于真实设备尺寸，所以不会。
   彻底修法：后备缓冲改成「布局尺寸 × 适配比例 × dpr」，再在 `context2d()` 里加一次基准
   `setTransform`，绘制代码仍然用 app 单位坐标。会波及 e2e 的像素断言，暂未动。
+
+## 九、与原版的数据互通（实测，不是推导）
+
+结论：**字段、键序、路点矩阵、实体属性全部一致，四种地图都能双向导入。**
+验证方式是真的跑一遍：克隆导出 → 原版 `initMapData()` 导入 → 原版
+`getRoadPointInfo()` + `unitDataConversion()` 导出 → 克隆 `WMLoadData()` 导入 → 再导出，
+三份 JSON 逐字段对比。
+
+### 9.1 顶层 12 个字段
+
+原版 `MapData` 构造函数的键顺序与克隆 `MapDataModel` 完全一致：
+
+```text
+name, bgName, type, mapWidth, mapHeight, nodeWidth, nodeHeight,
+alignment, offsetX, offsetY, roadDataArr, mapItems
+```
+
+注意 `nodeWidth` / `nodeHeight` 就是界面上的路点格子宽高（`ceilWidth` / `ceilHeight`）。
+`alignment` / `offsetX` / `offsetY` 在原版 `getMapData()` 里**根本没有被赋值**，始终是构造函数默认的 `0`，
+克隆同样写 `0`。
+
+### 9.2 `roadDataArr` 的行数——最容易错的一处
+
+原版 `RoadPointLayer.getRoadPointInfo()`：
+
+```js
+var c = mapType == MapType.angle45 ? 2 * i : i;   // i = MapRoadUtils.row
+```
+
+而 `MapRoadUtils.updateMapInfo` 对 angle45 已经算过 `_row = 2 * ceil(h / nh)`，
+所以**angle45 的导出行数是 `4 * ceil(h / nh)`，是网格行数的两倍**。
+1920×1440、格子 40×34.64 实测：
+
+| 地图类型 | 网格 rows×cols | 导出 rows×cols |
+| --- | --- | --- |
+| angle45 | 84 × 48 | **168 × 48** |
+| angle90 | 42 × 48 | 42 × 48 |
+| honeycomb | 42 × 64 | 42 × 64 |
+| honeycomb2 | 48 × 55 | 48 × 55 |
+
+这不是无害的冗余：angle45 的菱形真的会越过 `grid.row`。
+例如 (20,1400) 这个像素落在 `dy = 87`，而网格只有 84 行。
+之前克隆按网格行数分配数组，`paintAt` 的边界检查会把它**静默跳过**（画不上，也导不出）。
+现在按 `roadRowCount()` 分配与导出的行数，可画区域恰好等于原版可保存区域。
+
+### 9.3 实体属性（`classDic`）
+
+克隆 `schema.ts` 与原版 `AttributeUtils.classDic` 逐字段、逐顺序一致：
+
+| type | 属性（`type` 之后的键序） |
+| --- | --- |
+| npc | objId, objName, objType, skin, x, y, cx, cy, params, direction, npcType, isPatrol, dialogueId, taskId, funcId |
+| monster | objId, objName, objType, skin, x, y, cx, cy, params, direction, monsterType, isPatrol, dialogueId, fightId |
+| transfer | objId, objName, objType, skin, x, y, cx, cy, params, targetMapId, targetMapSpawnId, transferType |
+| spawnPoint | objId, objName, objType, skin, x, y, cx, cy, params, spawnId, defaultSpawn |
+
+`x`/`y` 是**像素坐标**，`cx`/`cy` 是网格坐标，两边都会写入；
+实测往返后 `x/y/cx/cy` 逐位不差（包括 `300.5` / `400.25` 这种小数）。
+
+**`mapItems` 的数组顺序**：原版 `unitDataConversion()` 读的是 `entityLayer.getMapUnits()`，
+而 `setDepthRand()` 把它按 `y` 降序排过（为了 zIndex）。克隆导出也按 `y` 降序排，
+否则导出→导入→导出 不是不动点（阵列顺序会变）。平手时保持插入顺序。
+
+### 9.4 双向导入实测结果
+
+| 地图类型 | 克隆导出 | 原版导入后再导出 | 克隆再导入再导出 | 路点/实体 |
+| --- | --- | --- | --- | --- |
+| angle45 | 168×48 | 168×48 | 168×48 | 一致 |
+| angle90 | 42×48 | 42×48 | 42×48 | 一致 |
+| honeycomb | 42×64 | 42×64 | 42×64 | 一致 |
+| honeycomb2 | 48×55 | 48×55 | 48×55 | 一致 |
+
+### 9.5 两个已知的边界（原版就如此，不是克隆缺失）
+
+- **angle45 的 `dx >= col` 格子无法保存**。原版的 `_roadNodeDic` 是个不限边的字典，
+  画笔能把 `dx = 68` 的格子存进去、也能画出来，但 `getRoadPointInfo()`
+  只遍历 `0..col-1`，所以存盘时**静默丢掉**（实测 `dx=68/80` 导出后不在数组里）。
+  克隆选择在画笔层就拒绝越界格子（`paintAt` 边界检查）—— 宁可画不上，也不生成“看得见但存不下”的数据。
+- **`type: "item"` 的实体原版导入不了**。`initMapUintInfo()` 只处理
+  npc / monster / transfer / spawnPoint，其他类型 `i` 保持 `undefined`，`initUnit(undefined, a)` 直接返回。
+  克隆会保留它们（可以当作附加数据），但不会主动产生这种实体。
+
+### 9.6 面向交互的测试钩子
+
+为了能把上面这些跑成自动化用例，`main.ts` 多暴露了三个入口（与 `WMNewMap` / `WMExport` 同一套路）：
+
+| 入口 | 用途 |
+| --- | --- |
+| `WMPaintAtPixel(px, py, value)` | 走真实笔刷路径涂一格（含边界检查） |
+| `WMAddEntity(obj)` | 追加一个经 `normalizeEntity` 规范化的实体 |
+| `WMLoadData(json)` | 和「文件 → 打开」走**同一个** `paramsFromMapData()`，返回导出结果 |

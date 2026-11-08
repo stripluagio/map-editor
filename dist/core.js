@@ -64,6 +64,7 @@
     rgbHex: () => rgbHex,
     rgbaToHex: () => rgbaToHex,
     roadRenderColor: () => roadRenderColor,
+    roadRowCount: () => roadRowCount,
     schemaFor: () => schemaFor
   });
 
@@ -518,6 +519,9 @@
     }
     return { col: 0, row: 0 };
   }
+  function roadRowCount(type, gridRow) {
+    return type === 0 /* angle45 */ ? gridRow * 2 : gridRow;
+  }
 
   // src/core/schema.ts
   function attr(attribute, tip, type = "normal", visible = true, editable = true, label) {
@@ -667,7 +671,7 @@
     d.offsetX = 0;
     d.offsetY = 0;
     d.roadDataArr = road.map((r) => r.slice());
-    d.mapItems = entities.map((e) => {
+    d.mapItems = entities.slice().sort((a, b) => (Number(b.y) || 0) - (Number(a.y) || 0)).map((e) => {
       const out = { type: e.type || "item" };
       const schema = CLASS_DIC[e.className || "EditorElement"] || CLASS_DIC.EditorElement;
       for (const a of schema) out[a.attribute] = e[a.attribute];

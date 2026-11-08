@@ -14,6 +14,7 @@ function get(p){return new Promise((res,rej)=>http.get({host:'127.0.0.1',port:PO
 
 let pass=0,fail=0;
 function ok(name,cond,extra){ if(cond){pass++;console.log('  PASS  '+name);} else {fail++;console.log('  FAIL  '+name+(extra!==undefined?'  -> '+JSON.stringify(extra):''));} }
+function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
 
 (async()=>{
   const ch=spawn(CHROME,['--headless=new','--disable-gpu','--no-sandbox','--hide-scrollbars',
@@ -708,6 +709,48 @@ function ok(name,cond,extra){ if(cond){pass++;console.log('  PASS  '+name);} els
      r45.on[0] === 2 && r45.on[30] === 2 && r45.on[15] === 1 && r45.on[45] === 1, r45.on);
   ok('45 度：关掉辅助线后全消失',
      [0, 15, 30, 45, 60].every(y => r45.off[y] === 0), r45.off);
+
+  // == 导出数据形状（对齐原版 getRoadPointInfo）==
+  const expShape = JSON.parse(await ev(`(function(){
+    var out = {};
+    [[0,'45'],[1,'90'],[2,'hc'],[3,'hc2']].forEach(function(t){
+      WMNewMap({ name:'s'+t[1], mapType:t[0], mapWidth:1920, mapHeight:1440,
+                 ceilWidth:40, ceilHeight:34.64 });
+      var d = WMGetMapData().toJson();
+      out[t[1]] = { rows: d.roadDataArr.length, cols: d.roadDataArr[0].length,
+                    gridRow: WMApp.geom.row, gridCol: WMApp.geom.col };
+    });
+    return JSON.stringify(out);
+  })()`));
+  eq('导出行数 angle45 = 168（原版实测）', expShape['45'].rows, 168);
+  eq('导出行数 angle90 = 42', expShape['90'].rows, 42);
+  eq('导出行数 honeycomb = 42', expShape.hc.rows, 42);
+  eq('导出行数 honeycomb2 = 48', expShape.hc2.rows, 48);
+  eq('导出列数 angle45/90 = 48', expShape['45'].cols + ',' + expShape['90'].cols, '48,48');
+  eq('导出列数 honeycomb = 64 / honeycomb2 = 55', expShape.hc.cols + ',' + expShape.hc2.cols, '64,55');
+  ok('angle45 网格只有 84 行，但导出 168 行',
+     expShape['45'].gridRow === 84 && expShape['45'].rows === 168, expShape['45']);
+
+  // == angle45 底部那条带现在能画（dy 84..89 曾因数组只有 84 行被静默丢弃）==
+  const bandCell = JSON.parse(await ev(`(function(){
+    WMNewMap({ name:'band', mapType:0, mapWidth:1920, mapHeight:1440,
+               ceilWidth:40, ceilHeight:34.64 });
+    var before = WMApp.painted.size;
+    var n = WMApp.geom.getNodeByPixel(20, 1400);      // dy = 87 > grid.row 84
+    WMPaintAtPixel(20, 1400, 0);
+    var after = WMApp.painted.size;
+    var d = WMGetMapData().toJson();
+    var hits = [];
+    for (var y = 0; y < d.roadDataArr.length; y++)
+      for (var x = 0; x < d.roadDataArr[y].length; x++)
+        if (d.roadDataArr[y][x] !== 1) hits.push([x, y, d.roadDataArr[y][x]]);
+    return JSON.stringify({ dx:n.dx, dy:n.dy, grew:after-before, hits:hits,
+                            rows:d.roadDataArr.length });
+  })()`));
+  ok('angle45 (20,1400) 落在 dy=87（超出网格行数）', bandCell.dy === 87, bandCell);
+  ok('这一格现在画得上（曾经静默跳过）', bandCell.grew === 1, bandCell);
+  ok('并且进了导出数组', JSON.stringify(bandCell.hits) === JSON.stringify([[bandCell.dx, 87, 0]]), bandCell.hits);
+  eq('导出仍是 168 行', bandCell.rows, 168);
 
   ws.close(); ch.kill();
   console.log('\nRESULT: '+pass+' passed, '+fail+' failed');

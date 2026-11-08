@@ -273,5 +273,74 @@ eq('45 aux off: no horizontal aux', N45off.horizontal.length, 0);
 eq('45 aux off: no vertical aux', N45off.vertical.length, 0);
 eq('45 aux off: diagonals stay', N45off.diagonals.length, 161);
 
+
+console.log('== roadDataArr 行数（对齐原版 getRoadPointInfo）==');
+// Measured on the real Cocos build: 1920x1440, cell 40x34.64
+eq('angle45  rowCount = 168 (4*ceil(1440/34.64))', C.roadRowCount(C.MapType.angle45, 84), 168);
+eq('angle90  rowCount = 42', C.roadRowCount(C.MapType.angle90, 42), 42);
+eq('honeycomb rowCount = 42', C.roadRowCount(C.MapType.honeycomb, 42), 42);
+eq('honeycomb2 rowCount = 48', C.roadRowCount(C.MapType.honeycomb2, 48), 48);
+// grid.row for the same map, straight from updateMapInfo
+{
+  const g = new C.MapRoadUtils();
+  const r45 = g.updateMapInfo(1920, 1440, 40, 34.64, C.MapType.angle45);
+  eq('angle45 grid.row = 84, col = 48', r45.row + 'x' + r45.col, '84x48');
+  eq('angle45 export rows = 2 * grid.row', C.roadRowCount(C.MapType.angle45, r45.row), 2 * r45.row);
+  const r90 = g.updateMapInfo(1920, 1440, 40, 34.64, C.MapType.angle90);
+  eq('angle90 grid = 42x48', r90.row + 'x' + r90.col, '42x48');
+  const rh = g.updateMapInfo(1920, 1440, 40, 34.64, C.MapType.honeycomb);
+  eq('honeycomb grid = 42x64', rh.row + 'x' + rh.col, '42x64');
+  const rh2 = g.updateMapInfo(1920, 1440, 40, 34.64, C.MapType.honeycomb2);
+  eq('honeycomb2 grid = 48x55', rh2.row + 'x' + rh2.col, '48x55');
+  // the angle45 diamond really does reach past grid.row
+  // (fresh instance — `g` is on honeycomb2 by now)
+  const g45 = new C.MapRoadUtils();
+  g45.updateMapInfo(1920, 1440, 40, 34.64, C.MapType.angle45);
+  const n = g45.getNodeByPixel(20, 1400);
+  ok('angle45 (20,1400) -> dy=87 > grid.row 84', n.dy === 87 && n.dy > r45.row, n.dy);
+  ok('  ... and dx=40 stays inside col', n.dx === 40 && n.dx < r45.col, n.dx);
+}
+
+console.log('== buildMapData 字段与顺序 ==');
+{
+  const params = new C.MapParamsModel({
+    name: 'rt', mapType: C.MapType.angle90, mapWidth: 1920, mapHeight: 1440,
+    ceilWidth: 60, ceilHeight: 30,
+  });
+  const road = [];
+  for (let y = 0; y < 48; y++) road.push(new Array(32).fill(1));
+  road[3][1] = 0;
+  const ents = [
+    { type: 'spawnPoint', className: 'EditorSpawnPoint', objId: '14', objName: 'S', x: 900, y: 1000,
+      cx: 40, cy: 60, params: '', spawnId: 3, defaultSpawn: true, skin: '0', objType: '5' },
+    { type: 'npc', className: 'EditorNPC', objId: '11', objName: 'N', x: 300, y: 400,
+      cx: 12, cy: 34, params: '', direction: 5, npcType: 1, isPatrol: true,
+      dialogueId: 1, taskId: 2, funcId: 3, skin: '1', objType: '2' },
+  ];
+  const d = C.buildMapData(params, road, ents, C.defaultSettings());
+  eq('12 fields, original key order',
+     Object.keys(d).join(','),
+     'name,bgName,type,mapWidth,mapHeight,nodeWidth,nodeHeight,alignment,offsetX,offsetY,roadDataArr,mapItems');
+  eq('nodeWidth/nodeHeight come from ceilWidth/ceilHeight', d.nodeWidth + 'x' + d.nodeHeight, '60x30');
+  eq('alignment/offset are 0 like the original', d.alignment + ',' + d.offsetX + ',' + d.offsetY, '0,0,0');
+  eq('mapItems sorted by y descending (setDepthRand order)',
+     d.mapItems.map(i => i.objName).join(','), 'S,N');
+  eq('spawnPoint item keys follow classDic',
+     Object.keys(d.mapItems[0]).join(','),
+     'type,objId,objName,objType,skin,x,y,cx,cy,params,spawnId,defaultSpawn');
+  eq('npc item keys follow classDic',
+     Object.keys(d.mapItems[1]).join(','),
+     'type,objId,objName,objType,skin,x,y,cx,cy,params,direction,npcType,isPatrol,dialogueId,taskId,funcId');
+  eq('road copied, not shared', d.roadDataArr[3][1] + '|' + (d.roadDataArr[3] === road[3]), '0|false');
+  // export -> import -> export must be a fixed point
+  const back = C.MapDataModel.fromJson(JSON.parse(JSON.stringify(d)));
+  const again = C.buildMapData(
+    new C.MapParamsModel({ name: back.name, mapType: back.type, mapWidth: back.mapWidth,
+      mapHeight: back.mapHeight, ceilWidth: back.nodeWidth, ceilHeight: back.nodeHeight }),
+    back.roadDataArr, back.mapItems.map(C.normalizeEntity), C.defaultSettings());
+  eq('export -> import -> export is a fixed point',
+     JSON.stringify(again) === JSON.stringify(d), true);
+}
+
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

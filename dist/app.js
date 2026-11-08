@@ -442,6 +442,9 @@
     }
     return { col: 0, row: 0 };
   }
+  function roadRowCount(type, gridRow) {
+    return type === 0 /* angle45 */ ? gridRow * 2 : gridRow;
+  }
 
   // src/core/schema.ts
   function attr(attribute, tip, type = "normal", visible = true, editable = true, label) {
@@ -590,7 +593,7 @@
     d.offsetX = 0;
     d.offsetY = 0;
     d.roadDataArr = road.map((r) => r.slice());
-    d.mapItems = entities.map((e) => {
+    d.mapItems = entities.slice().sort((a, b) => (Number(b.y) || 0) - (Number(a.y) || 0)).map((e) => {
       const out = { type: e.type || "item" };
       const schema = CLASS_DIC[e.className || "EditorElement"] || CLASS_DIC.EditorElement;
       for (const a of schema) out[a.attribute] = e[a.attribute];
@@ -2198,14 +2201,16 @@
       params.ceilHeight,
       params.mapType
     );
+    const roadRows = roadRowCount(params.mapType, g.row);
+    const blank = () => new Array(g.col).fill(state.setting.defaultRoadValue);
     state.road = [];
-    for (let y = 0; y < g.row; y++) state.road.push(new Array(g.col).fill(state.setting.defaultRoadValue));
+    for (let y = 0; y < roadRows; y++) state.road.push(blank());
     state.painted = /* @__PURE__ */ new Set();
     state.entities = [];
     if (data) {
       if (Array.isArray(data.roadDataArr)) {
-        state.road = data.roadDataArr.map((r) => Array.isArray(r) ? r.slice() : new Array(g.col).fill(state.setting.defaultRoadValue));
-        while (state.road.length < g.row) state.road.push(new Array(g.col).fill(state.setting.defaultRoadValue));
+        state.road = data.roadDataArr.map((r) => Array.isArray(r) ? r.slice() : blank());
+        while (state.road.length < roadRows) state.road.push(blank());
       }
       if (Array.isArray(data.mapItems)) state.entities = data.mapItems.map(normalizeEntity);
     }
@@ -2436,21 +2441,23 @@
         alertBox("地图数据解析失败：" + err.message);
         return;
       }
-      const p = new MapParamsModel({
-        name: String(d.name || "未命名"),
-        bgName: String(d.bgName || "map_bg"),
-        mapType: Number(d.type) || 0 /* angle45 */,
-        mapWidth: Number(d.mapWidth) || 1920,
-        mapHeight: Number(d.mapHeight) || 1080,
-        ceilWidth: Number(d.nodeWidth) || 60,
-        ceilHeight: Number(d.nodeHeight) || 30,
-        bgImage: state.omBgImage || state.bgImage,
-        bgSrc: state.omBgSrc
-      });
-      initDocument2(p, d);
+      initDocument2(paramsFromMapData(d), d);
       closeView();
     });
     $("omCancel").addEventListener("click", closeView);
+  }
+  function paramsFromMapData(d) {
+    return new MapParamsModel({
+      name: String(d.name || "未命名"),
+      bgName: String(d.bgName || "map_bg"),
+      mapType: d.type === void 0 || d.type === null ? 0 /* angle45 */ : Number(d.type),
+      mapWidth: Number(d.mapWidth) || 1920,
+      mapHeight: Number(d.mapHeight) || 1080,
+      ceilWidth: Number(d.nodeWidth) || 60,
+      ceilHeight: Number(d.nodeHeight) || 30,
+      bgImage: state.omBgImage || state.bgImage,
+      bgSrc: state.omBgSrc
+    });
   }
 
   // src/ui/settings-table.ts
@@ -3528,7 +3535,26 @@
       WMExport: { buildMapExport },
       WMCore: { entitySize, entityRing },
       /** Test seam: build a fresh document of any map type (used by tests/e2e.cjs). */
-      WMNewMap: (o) => initDocument(new MapParamsModel(o), null)
+      WMNewMap: (o) => initDocument(new MapParamsModel(o), null),
+      /**
+       * Test seam: paint one cell by map pixel. Same call shape as `input.ts`
+       * (`paintAt(getNodeByPixel(...), value)`), so probes can exercise the real
+       * brush path — including the out-of-bounds guard — without a mouse.
+       */
+      WMPaintAtPixel: (px, py, value) => paintAt(state.geom.getNodeByPixel(px, py), value),
+      /**
+       * Test seam: load a MapData JSON exactly like 文件 → 打开 does
+       * (same `paramsFromMapData` path, so a probe can't drift from the UI).
+       */
+      WMLoadData: (d) => {
+        initDocument(paramsFromMapData(d), d);
+        return getMapData().toJson();
+      },
+      /** Test seam: append a normalized entity (used by tests + interop probes). */
+      WMAddEntity: (o) => {
+        state.entities.push(normalizeEntity(o));
+        render();
+      }
     });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

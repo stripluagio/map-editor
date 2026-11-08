@@ -1,5 +1,6 @@
 import { LAUNCH_PARAMS } from '../core/constants';
 import { MapParamsModel, normalizeEntity } from '../core/model';
+import { roadRowCount } from '../core/geometry';
 import type { MapData } from '../core/types';
 import { state } from './state';
 import { resizeCanvas, render } from '../render/canvas';
@@ -36,14 +37,19 @@ export function initDocument(params: MapParamsModel, data: Partial<MapData> | nu
   state.params = params;
   const g = state.geom.updateMapInfo(
     params.mapWidth, params.mapHeight, params.ceilWidth, params.ceilHeight, params.mapType);
+  // angle45 exports twice the grid's rows (see `roadRowCount`), and its diamond
+  // reaches further than `grid.row`, so allocate the export shape — otherwise
+  // the bottom-left band is silently unpaintable.
+  const roadRows = roadRowCount(params.mapType, g.row);
+  const blank = () => new Array<number>(g.col).fill(state.setting.defaultRoadValue);
   state.road = [];
-  for (let y = 0; y < g.row; y++) state.road.push(new Array<number>(g.col).fill(state.setting.defaultRoadValue));
+  for (let y = 0; y < roadRows; y++) state.road.push(blank());
   state.painted = new Set<number>();
   state.entities = [];
   if (data) {
     if (Array.isArray(data.roadDataArr)) {
-      state.road = data.roadDataArr.map(r => Array.isArray(r) ? r.slice() : new Array<number>(g.col).fill(state.setting.defaultRoadValue));
-      while (state.road.length < g.row) state.road.push(new Array<number>(g.col).fill(state.setting.defaultRoadValue));
+      state.road = data.roadDataArr.map(r => Array.isArray(r) ? r.slice() : blank());
+      while (state.road.length < roadRows) state.road.push(blank());
     }
     if (Array.isArray(data.mapItems)) state.entities = data.mapItems.map(normalizeEntity);
   }

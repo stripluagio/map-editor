@@ -97,15 +97,24 @@ export function buildMapData(params: MapParams, road: number[][], entities: MapI
   d.nodeWidth = params.ceilWidth; d.nodeHeight = params.ceilHeight;
   d.alignment = 0; d.offsetX = 0; d.offsetY = 0;
   d.roadDataArr = road.map(r => r.slice());
-  d.mapItems = entities.map(e => {
-    const out: MapItem = { type: e.type || 'item' };
-    const schema = CLASS_DIC[e.className || 'EditorElement'] || CLASS_DIC.EditorElement;
-    for (const a of schema) out[a.attribute] = e[a.attribute];
-    if (e.type === 'item' || !schema.length) {
-      out.x = e.x; out.y = e.y; out.width = e.width || 100; out.height = e.height || 100;
-    }
-    return out;
-  });
+  // Original `unitDataConversion` reads `entityLayer.getMapUnits()`, and
+  // `setDepthRand()` keeps that array sorted by y descending, so the exported
+  // order is depth order — not the order the user dropped them in. Sorting here
+  // makes export → import → export a fixed point and keeps the file comparable
+  // with the original's byte-for-byte (ties keep insertion order, unlike the
+  // original's `y > y ? -1 : 1` comparator which never returns 0).
+  d.mapItems = entities
+    .slice()
+    .sort((a, b) => (Number(b.y) || 0) - (Number(a.y) || 0))
+    .map(e => {
+      const out: MapItem = { type: e.type || 'item' };
+      const schema = CLASS_DIC[e.className || 'EditorElement'] || CLASS_DIC.EditorElement;
+      for (const a of schema) out[a.attribute] = e[a.attribute];
+      if (e.type === 'item' || !schema.length) {
+        out.x = e.x; out.y = e.y; out.width = e.width || 100; out.height = e.height || 100;
+      }
+      return out;
+    });
   void settings;
   return d.toJson();
 }

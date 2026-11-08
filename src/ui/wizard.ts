@@ -166,17 +166,29 @@ export function bindOpenMap(initDocument: InitDocument): void {
     let d: Record<string, unknown>;
     try { d = JSON.parse(state.omData); }
     catch (err) { alertBox('地图数据解析失败：' + (err as Error).message); return; }
-    const p = new MapParamsModel({
-      name: String(d.name || '未命名'), bgName: String(d.bgName || 'map_bg'),
-      mapType: Number(d.type) || MapType.angle45,
-      mapWidth: Number(d.mapWidth) || 1920, mapHeight: Number(d.mapHeight) || 1080,
-      ceilWidth: Number(d.nodeWidth) || 60, ceilHeight: Number(d.nodeHeight) || 30,
-      bgImage: state.omBgImage || state.bgImage, bgSrc: state.omBgSrc,
-    });
-    initDocument(p, d as Partial<MapData>);
+    initDocument(paramsFromMapData(d), d as Partial<MapData>);
     closeView();
   });
   $('omCancel').addEventListener('click', closeView);
+}
+
+
+/**
+ * MapParams from an imported MapData JSON.
+ *
+ * `nodeWidth`/`nodeHeight` are the original's names for `ceilWidth`/`ceilHeight`.
+ * Note `type` is read with `??` rather than `||`: MapType.angle45 is `0`, so
+ * `Number(d.type) || angle45` would look right by accident but silently swallow
+ * a genuine 0 from a future enum change.
+ */
+export function paramsFromMapData(d: Record<string, unknown>): MapParamsModel {
+  return new MapParamsModel({
+    name: String(d.name || '未命名'), bgName: String(d.bgName || 'map_bg'),
+    mapType: d.type === undefined || d.type === null ? MapType.angle45 : Number(d.type),
+    mapWidth: Number(d.mapWidth) || 1920, mapHeight: Number(d.mapHeight) || 1080,
+    ceilWidth: Number(d.nodeWidth) || 60, ceilHeight: Number(d.nodeHeight) || 30,
+    bgImage: state.omBgImage || state.bgImage, bgSrc: state.omBgSrc,
+  });
 }
 
 export function openViewByName(_name: ViewName): void { /* handled in views.ts */ }

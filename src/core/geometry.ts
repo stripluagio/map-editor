@@ -148,8 +148,7 @@ export class MapRoadUtils {
 }
 
 /** Compute the row/col count for a new map (wizard validation). */
-export function computeGridSize(w: number, h: number, nw: number, nh: number, type: MapType): { col: number; row: number } {
-  switch (type) {
+export function computeGridSize(w: number, h: number, nw: number, nh: number, type: MapType): { col: number; row: number } {  switch (type) {
     case MapType.angle45: return { col: Math.ceil(w / nw), row: 2 * Math.ceil(h / nh) };
     case MapType.angle90: return { col: Math.ceil(w / nw), row: Math.ceil(h / nh) };
     case MapType.honeycomb: return {
@@ -162,4 +161,27 @@ export function computeGridSize(w: number, h: number, nw: number, nh: number, ty
     };
   }
   return { col: 0, row: 0 };
+}
+
+/**
+ * Number of rows the exported `roadDataArr` has — which is NOT always `grid.row`.
+ *
+ * Original `RoadPointLayer.getRoadPointInfo()`:
+ *
+ *     var c = mapType == MapType.angle45 ? 2 * i : i;   // i = MapRoadUtils.row
+ *
+ * and `MapRoadUtils.updateMapInfo` already sets `_row = 2 * ceil(h / nh)` for
+ * angle45, so the export is `4 * ceil(h / nh)` — twice the grid.
+ *
+ * Measured on the real Cocos build (1920x1440, cell 40x34.64):
+ *   angle45   168 rows x 48 cols      angle90  42 x 48
+ *   honeycomb  42 x 64                honeycomb2  48 x 55
+ *
+ * It is not cosmetic: an angle45 map's diamond reaches `dy = 88` while
+ * `grid.row` is only 84, so a grid-sized array silently drops those cells
+ * (`paintAt` skips out-of-range nodes). Matching the original's height makes
+ * the paintable area exactly equal to the savable area.
+ */
+export function roadRowCount(type: MapType, gridRow: number): number {
+  return type === MapType.angle45 ? gridRow * 2 : gridRow;
 }
