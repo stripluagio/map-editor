@@ -89,8 +89,12 @@ export class AppState {
   entitySkin = 0;
   editRoadModel = false;
   showAnchor = false;
-  /** 原版 `GridLayer._isShowAuxiliaryLine`（默认 true）—— 六边形地图那两族矩形辅助线。 */
-  showAuxLine = true;
+  /**
+   * 原版 `GridLayer._isShowAuxiliaryLine` 默认是 `true`；本项目**故意默认关闭**，
+   * 因为那两族矩形辅助线是原版给「画路点时对格子用的参考线」，默认铺满屏很吵。
+   * 菜单「编辑 → 显示辅助线（J）」可随时打开，渲染逻辑与原版逐参数一致。
+   */
+  showAuxLine = false;
   roadStyle = 0;
 
   // interaction

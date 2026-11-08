@@ -1,4 +1,4 @@
-/* WebMobileClone core unit tests  - run with: node tests/unit.test.cjs */
+/* Map Editor core unit tests - run with: node tests/unit.test.cjs */
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const sandbox = { window: {}, console };

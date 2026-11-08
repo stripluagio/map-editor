@@ -1,5 +1,5 @@
 /* ==========================================================================
- * WebMobileClone — application entry point (composition root)
+ * Map Editor — application entry point (composition root)
  * Wires core / state / render / ui / app modules together.
  * ========================================================================== */
 import { MapType } from './core/types';

@@ -1,4 +1,4 @@
-/** Shared type definitions for WebMobileClone. */
+/** Shared type definitions for Map Editor. */
 
 export enum MapType {
   angle45 = 0,

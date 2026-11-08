@@ -1,8 +1,8 @@
 {
-  "name": "webmobileclone",
+  "name": "map-editor",
   "version": "2.0.0",
   "private": true,
-  "description": "1:1 复刻 Cocos Creator 2.x EasyMapEditor (web-mobile) 的 UI 与功能 — TypeScript 模块化版",
+  "description": "浏览器里的 2D 游戏地图编辑器 — 四种网格、路点编辑、A* 寻路可视化、数据与 EasyMapEditor 互通",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",

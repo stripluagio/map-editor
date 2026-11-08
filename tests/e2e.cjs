@@ -1,4 +1,4 @@
-/* Browser end-to-end test for WebMobileClone.
+/* Browser end-to-end test for Map Editor.
  * Prereq: static server on http://127.0.0.1:8900 (python -m http.server 8900)
  * Run: node tests/e2e.cjs
  * Uses Chrome DevTools Protocol directly (no npm dependencies).
@@ -457,6 +457,8 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
     WMApp.layers.map = false; WMApp.layers.road = false; WMApp.layers.grid = true;
     // 前面的用例平移/缩放过视图，先归零，扫描坐标才是确定的
     WMApp.view.offsetX = 0; WMApp.view.offsetY = 0; WMApp.view.zoom = 1;
+    // 本项目默认关闭辅助线（见 state.showAuxLine），这里要量辅助线，显式打开
+    WMApp.showAuxLine = true;
     WMApp.roadVersion++; WMRender();
 
     var cv = document.getElementById('mapCanvas');
@@ -548,11 +550,13 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('六边形横排间距 = ceilHeight 34.64（pointy-top）',
      hexGaps.length >= 3 && hexGaps.every(g => Math.abs(g - 34.64) <= 1), hexGaps);
 
-  console.log('== 辅助线开关（编辑菜单 / J）==');
+  console.log('== 辅助线开关（默认关闭 / 编辑菜单 / J）==');
   // 走真实的菜单 DOM：打开「编辑」-> 点那条辅助线项
   const aux = JSON.parse(await E(`(function(){
     WMApp.layers.map = false; WMApp.layers.road = false; WMApp.layers.grid = true;
     WMApp.view.offsetX = 0; WMApp.view.offsetY = 0; WMApp.view.zoom = 1;
+    // 回到本项目默认值（关闭），不受前面用例影响
+    WMApp.showAuxLine = false;
     WMApp.roadVersion++; WMRender();
 
     function at(mx, my) {
@@ -590,36 +594,40 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
       return text;
     }
 
-    var on = { flag: WMApp.showAuxLine, aux: auxAt(305, 110), hex: hexEdgeAt() };
-    var labelOn = menuLabel();                       // 点一下 -> 关
-    var off = { flag: WMApp.showAuxLine, aux: auxAt(305, 110), hex: hexEdgeAt() };
-    var labelOff = menuLabel();                      // 再点 -> 开
-    var back = { flag: WMApp.showAuxLine, aux: auxAt(305, 110), hex: hexEdgeAt() };
+    var s0 = { flag: WMApp.showAuxLine, aux: auxAt(305, 110), hex: hexEdgeAt() };
+    var label0 = menuLabel();                        // 点一下 -> 开
+    var s1 = { flag: WMApp.showAuxLine, aux: auxAt(305, 110), hex: hexEdgeAt() };
+    var label1 = menuLabel();                        // 再点 -> 关
+    var s2 = { flag: WMApp.showAuxLine, aux: auxAt(305, 110), hex: hexEdgeAt() };
 
-    return JSON.stringify({ on: on, off: off, back: back,
-                            labelOn: labelOn, labelOff: labelOff });
+    return JSON.stringify({ s0: s0, s1: s1, s2: s2, label0: label0, label1: label1 });
   })()`));
 
-  ok('默认开着辅助线（原版 _isShowAuxiliaryLine = true）', aux.on.flag === true, aux.on);
-  ok('开着时 110 那条横辅助线可见', aux.on.aux > 0, aux.on);
-  ok('菜单项标题跟着状态走（开着显示「隐藏辅助线」）',
-     /隐藏辅助线/.test(aux.labelOn || ''), aux.labelOn);
-  ok('点菜单项后开关变成关', aux.off.flag === false, aux.off);
-  ok('关掉后 110 那条横辅助线消失', aux.off.aux === 0, aux.off);
-  ok('关掉后六边形描边还在', aux.off.hex === true, aux.off);
-  ok('再点一次恢复显示', aux.back.flag === true && aux.back.aux > 0, aux.back);
-  ok('标题回到「显示辅助线」', /显示辅助线/.test(aux.labelOff || '') && !/隐藏/.test(aux.labelOff || ''),
-     aux.labelOff);
+  // 原版 `_isShowAuxiliaryLine` 默认 true，本项目**故意默认关闭**（屏上太吵）。
+  // 下面同时钉住「默认值」和「开关两个方向都有效」。
+  ok('默认关闭辅助线（本项目取舍，原版默认 true）', aux.s0.flag === false, aux.s0);
+  ok('默认状态下 110 那条横辅助线不可见', aux.s0.aux === 0, aux.s0);
+  ok('默认状态下六边形描边照常绘制', aux.s0.hex === true, aux.s0);
+  ok('默认状态菜单项写「显示辅助线（J）」',
+     /^显示辅助线/.test(aux.label0 || ''), aux.label0);
+  ok('点菜单项后开关变成开', aux.s1.flag === true, aux.s1);
+  ok('打开后 110 那条横辅助线可见', aux.s1.aux > 0, aux.s1);
+  ok('打开后菜单项变成「隐藏辅助线（J）」',
+     /^隐藏辅助线/.test(aux.label1 || ''), aux.label1);
+  ok('再点一次又关掉', aux.s2.flag === false, aux.s2);
+  ok('关掉后 110 那条横辅助线消失', aux.s2.aux === 0, aux.s2);
+  ok('关掉后六边形描边还在', aux.s2.hex === true, aux.s2);
 
   // 快捷键 J 与菜单走同一条 action
   const keyRes = JSON.parse(await E(`(function(){
+    WMApp.showAuxLine = false; WMApp.roadVersion++; WMRender();
     var before = WMApp.showAuxLine;
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }));
     var after = WMApp.showAuxLine;
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }));
     return JSON.stringify({ before: before, after: after, restored: WMApp.showAuxLine });
   })()`));
-  ok('J 键也能切辅助线', keyRes.before === true && keyRes.after === false && keyRes.restored === true,
+  ok('J 键也能切辅助线', keyRes.before === false && keyRes.after === true && keyRes.restored === false,
      keyRes);
 
   console.log('== 90 度网格（原版 draw90AngleGrid：半格间距 + 辅助线开关）==');
