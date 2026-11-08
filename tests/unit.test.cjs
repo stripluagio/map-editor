@@ -227,5 +227,51 @@ ok('pointy-top apexes are x-centred',
 ok('flat-top apexes are y-centred',
    near(Vf[2][1], 100) && near(Vf[5][1], 100), [Vf[2], Vf[5]]);
 
+console.log('== 90 度网格（原版 draw90AngleGrid：半格间距）==');
+// 60x30 格子 + 1920x1440 地图 -> cols=32, rows=48
+const N90 = C.angle90Lines(1920, 1440, 60, 30, true);
+eq('90: horizontal count = 2*rows+2', N90.horizontal.length, 98);
+eq('90: vertical count = 2*cols+2', N90.vertical.length, 66);
+eq('90: first line at y=0', N90.horizontal[0].pos, 0);
+eq('90: step is half a cell (15)', N90.horizontal[1].pos - N90.horizontal[0].pos, 15);
+eq('90: even lines are cell borders', N90.horizontal[0].color, '#bbbbbbaa');
+eq('90: even lines are 2px', N90.horizontal[0].width, 2);
+eq('90: odd lines are the faint aux', N90.horizontal[1].color, '#00550025');
+eq('90: odd lines are 1px', N90.horizontal[1].width, 1);
+eq('90: no diagonals', N90.diagonals.length, 0);
+
+const N90off = C.angle90Lines(1920, 1440, 60, 30, false);
+eq('90 aux off: only cell borders', N90off.horizontal.length, 49);
+eq('90 aux off: pitch is a full cell (30)', N90off.horizontal[1].pos - N90off.horizontal[0].pos, 30);
+ok('90 aux off: every line is a 2px border',
+   N90off.horizontal.every(l => l.color === '#bbbbbbaa' && l.width === 2) &&
+   N90off.vertical.every(l => l.color === '#bbbbbbaa' && l.width === 2));
+eq('90 aux off: vertical count', N90off.vertical.length, 33);
+
+console.log('== 45 度网格（原版 draw45AngleGrid：矩形辅助线 + 斜线）==');
+const N45 = C.angle45Lines(1920, 1440, 60, 30, true);
+eq('45: horizontal count = t+1', N45.horizontal.length, 98);        // t = 2*48+1
+eq('45: vertical count = e+1', N45.vertical.length, 66);             // e = 2*32+1
+eq('45: even aux is the 40% blue', N45.horizontal[0].color, '#11115566');
+eq('45: odd aux is the faint green', N45.horizontal[1].color, '#00550025');
+eq('45: aux is 1px', N45.horizontal[0].width, 1);
+eq('45: diagonal count = e+t-1', N45.diagonals.length, 161);
+eq('45: first diagonal (a=1) starts on the top edge',
+   [N45.diagonals[0].x1, N45.diagonals[0].y1, N45.diagonals[0].x2, N45.diagonals[0].y2].join(','),
+   '30,0,0,15');
+eq('45: second diagonal (a=2) starts on the bottom edge',
+   [N45.diagonals[1].x1, N45.diagonals[1].y1, N45.diagonals[1].x2, N45.diagonals[1].y2].join(','),
+   '60,1455,0,1425');
+// both diagonal families have the same |slope| = nh/nw
+const slopeOf = d => Math.abs((d.y2 - d.y1) / (d.x2 - d.x1));
+ok('45: every diagonal has slope nh/nw',
+   N45.diagonals.every(d => Math.abs(slopeOf(d) - 30 / 60) < 1e-9),
+   [slopeOf(N45.diagonals[0]), slopeOf(N45.diagonals[1])]);
+
+const N45off = C.angle45Lines(1920, 1440, 60, 30, false);
+eq('45 aux off: no horizontal aux', N45off.horizontal.length, 0);
+eq('45 aux off: no vertical aux', N45off.vertical.length, 0);
+eq('45 aux off: diagonals stay', N45off.diagonals.length, 161);
+
 console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

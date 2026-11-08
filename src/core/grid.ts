@@ -92,3 +92,88 @@ export function hexVertices(
   return [[x, y + d], [x + p, y], [x + nh, y + d],
           [x + nh, y + l], [x + p, y + nw], [x, y + l]];
 }
+
+/** 格子边界色（原版 `lingColor3`）。 */
+export const GRID_BORDER = '#bbbbbbaa';
+
+export interface Segment { x1: number; y1: number; x2: number; y2: number }
+
+export interface RectGrid {
+  /** y 坐标（map 单位）。 */
+  horizontal: AuxLine[];
+  /** x 坐标（map 单位）。 */
+  vertical: AuxLine[];
+  /** 45 度地图的斜线；90 度恒为空。 */
+  diagonals: Segment[];
+}
+
+/**
+ * 90 度地图的网格 —— 复刻 `GridLayer.draw90AngleGrid`。
+ *
+ * 原版在**半格**间距上画线：偶数条是格子边界（`lingColor3` 2px），
+ * 奇数条是辅助线（`lingColor1` 1px）。
+ *
+ * ⚠️ 原版关掉辅助线时，奇数条因为 `this._isShowAuxiliaryLine && (...)` **短路**
+ * 而**仍然被画出来**（沿用上一条的灰 2px）—— 等于「关不掉」。
+ * 这里按开关的**本意**实现：关掉后只留偶数条格子边界（间距变回整格）。
+ */
+export function angle90Lines(
+  mapWidth: number, mapHeight: number,
+  nw: number, nh: number, showAux: boolean,
+): RectGrid {
+  const halfW = nw / 2, halfH = nh / 2;
+  const cols = Math.ceil(mapWidth / nw), rows = Math.ceil(mapHeight / nh);
+  const horizontal: AuxLine[] = [];
+  const vertical: AuxLine[] = [];
+  for (let n = 0; n <= 2 * rows + 1; n++) {
+    const even = n % 2 === 0;
+    if (!even && !showAux) continue;
+    horizontal.push({ pos: n * halfH, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+  }
+  for (let r = 0; r <= 2 * cols + 1; r++) {
+    const even = r % 2 === 0;
+    if (!even && !showAux) continue;
+    vertical.push({ pos: r * halfW, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+  }
+  return { horizontal, vertical, diagonals: [] };
+}
+
+/**
+ * 45 度地图的网格 —— 复刻 `GridLayer.draw45AngleGrid`。
+ *
+ * 两部分：
+ * - **两族矩形辅助线**（整段都受 `_isShowAuxiliaryLine` 控制）：半格间距，
+ *   偶数条 `lingColor2`(蓝)、奇数条 `lingColor1`(绿)，都是 1px。
+ * - **两族斜线**（始终画）：`lingColor3` 2px。`a` 为奇数时从 `(a*halfW, 0)`
+ *   连到 `(0, a*halfH)`，偶数时从 `(a*halfW, o)` 连到 `(0, (t-a)*halfH)`。
+ *   原版对超出 `i`/`o` 的端点做了裁剪；这里不做，交给 canvas 裁 —— 端点只是沿同一条
+ *   线移动，画面内可见部分完全一致。
+ */
+export function angle45Lines(
+  mapWidth: number, mapHeight: number,
+  nw: number, nh: number, showAux: boolean,
+): RectGrid {
+  const halfW = nw / 2, halfH = nh / 2;
+  const cols = Math.ceil(mapWidth / nw), rows = Math.ceil(mapHeight / nh);
+  const t = 2 * rows + 1, e = 2 * cols + 1;
+  const horizontal: AuxLine[] = [];
+  const vertical: AuxLine[] = [];
+  if (showAux) {
+    for (let n = 0; n <= t; n++) {
+      horizontal.push({ pos: n * halfH, color: n % 2 === 0 ? AUX_STRONG : AUX_FAINT, width: 1 });
+    }
+    for (let r = 0; r <= e; r++) {
+      vertical.push({ pos: r * halfW, color: r % 2 === 0 ? AUX_STRONG : AUX_FAINT, width: 1 });
+    }
+  }
+  const o = t * halfH;
+  const diagonals: Segment[] = [];
+  for (let a = 1; a < e + t; a++) {
+    if (a % 2 === 1) {
+      diagonals.push({ x1: a * halfW, y1: 0, x2: 0, y2: a * halfH });
+    } else {
+      diagonals.push({ x1: a * halfW, y1: o, x2: 0, y2: (t - a) * halfH });
+    }
+  }
+  return { horizontal, vertical, diagonals };
+}

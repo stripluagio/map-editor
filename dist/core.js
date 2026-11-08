@@ -16,6 +16,7 @@
     CLASS_DIC: () => CLASS_DIC,
     ENTITY_SKINS: () => ENTITY_SKINS,
     ENTITY_TYPES: () => ENTITY_TYPES,
+    GRID_BORDER: () => GRID_BORDER,
     LAUNCH_PARAMS: () => LAUNCH_PARAMS,
     MAP_TYPE_NAMES: () => MAP_TYPE_NAMES,
     MAX_CEIL_COUNT: () => MAX_CEIL_COUNT,
@@ -40,6 +41,8 @@
     TYPE_TO_CLASS: () => TYPE_TO_CLASS,
     UndoRedo: () => UndoRedo,
     VIEW_IDS: () => VIEW_IDS,
+    angle45Lines: () => angle45Lines,
+    angle90Lines: () => angle90Lines,
     buildMapData: () => buildMapData,
     computeGridSize: () => computeGridSize,
     defaultEntity: () => defaultEntity,
@@ -925,6 +928,49 @@
       [x + p, y + nw],
       [x, y + l]
     ];
+  }
+  var GRID_BORDER = "#bbbbbbaa";
+  function angle90Lines(mapWidth, mapHeight, nw, nh, showAux) {
+    const halfW = nw / 2, halfH = nh / 2;
+    const cols = Math.ceil(mapWidth / nw), rows = Math.ceil(mapHeight / nh);
+    const horizontal = [];
+    const vertical = [];
+    for (let n = 0; n <= 2 * rows + 1; n++) {
+      const even = n % 2 === 0;
+      if (!even && !showAux) continue;
+      horizontal.push({ pos: n * halfH, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+    }
+    for (let r = 0; r <= 2 * cols + 1; r++) {
+      const even = r % 2 === 0;
+      if (!even && !showAux) continue;
+      vertical.push({ pos: r * halfW, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+    }
+    return { horizontal, vertical, diagonals: [] };
+  }
+  function angle45Lines(mapWidth, mapHeight, nw, nh, showAux) {
+    const halfW = nw / 2, halfH = nh / 2;
+    const cols = Math.ceil(mapWidth / nw), rows = Math.ceil(mapHeight / nh);
+    const t = 2 * rows + 1, e = 2 * cols + 1;
+    const horizontal = [];
+    const vertical = [];
+    if (showAux) {
+      for (let n = 0; n <= t; n++) {
+        horizontal.push({ pos: n * halfH, color: n % 2 === 0 ? AUX_STRONG : AUX_FAINT, width: 1 });
+      }
+      for (let r = 0; r <= e; r++) {
+        vertical.push({ pos: r * halfW, color: r % 2 === 0 ? AUX_STRONG : AUX_FAINT, width: 1 });
+      }
+    }
+    const o = t * halfH;
+    const diagonals = [];
+    for (let a = 1; a < e + t; a++) {
+      if (a % 2 === 1) {
+        diagonals.push({ x1: a * halfW, y1: 0, x2: 0, y2: a * halfH });
+      } else {
+        diagonals.push({ x1: a * halfW, y1: o, x2: 0, y2: (t - a) * halfH });
+      }
+    }
+    return { horizontal, vertical, diagonals };
   }
 
   // src/core/undo.ts

@@ -607,6 +607,108 @@ function ok(name,cond,extra){ if(cond){pass++;console.log('  PASS  '+name);} els
   ok('J 键也能切辅助线', keyRes.before === true && keyRes.after === false && keyRes.restored === true,
      keyRes);
 
+  console.log('== 90 度网格（原版 draw90AngleGrid：半格间距 + 辅助线开关）==');
+  const r90 = JSON.parse(await E(`(function(){
+    WMNewMap({ name: 't90', mapType: 1, mapWidth: 1920, mapHeight: 1440, ceilWidth: 60, ceilHeight: 30 });
+    WMApp.layers.map = false; WMApp.layers.road = false; WMApp.layers.grid = true;
+    WMApp.view.offsetX = 0; WMApp.view.offsetY = 0; WMApp.view.zoom = 1;
+    WMApp.showAuxLine = true; WMApp.roadVersion++; WMRender();
+
+    var cv = document.getElementById('mapCanvas');
+    var d = null;
+    // 每轮 scan 前重新取一次快照 —— 复用同一个 ImageData 会读到切换前的旧像素
+    function snap() { d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; }
+    function at(mx, my) {
+      var x = Math.round(mx), y = Math.round(my);
+      if (x < 0 || y < 0 || x >= cv.width || y >= cv.height) return null;
+      var i = (y * cv.width + x) * 4;
+      return [d[i], d[i + 1], d[i + 2]];
+    }
+    // 格子边界 = 中性亮灰（#bbbbbbaa 2px）；辅助线 = 暗绿（#00550025 1px）
+    function kind(p) {
+      if (!p) return 'none';
+      var lo = Math.min(p[0], p[1], p[2]), hi = Math.max(p[0], p[1], p[2]);
+      if (lo > 70 && hi - lo < 30) return 'border';
+      if (p[0] + p[1] + p[2] < 150 && p[1] - p[0] >= 2 && p[2] - p[0] <= 1) return 'aux';
+      return 'none';
+    }
+    function rowKind(mx, my) {
+      for (var k = -1; k <= 1; k++) { var v = kind(at(mx, my + k)); if (v !== 'none') return v; }
+      return 'none';
+    }
+    var probeX = 100;      // 竖线在 30 的倍数上，100 不在线上
+    function scan() {
+      snap();
+      var out = {};
+      [0, 15, 30, 45, 60].forEach(function (y) { out[y] = rowKind(probeX, y); });
+      return out;
+    }
+    var on = scan();
+    WMApp.showAuxLine = false; WMApp.roadVersion++; WMRender();
+    var off = scan();
+    WMApp.showAuxLine = true; WMApp.roadVersion++; WMRender();
+    return JSON.stringify({ on: on, off: off });
+  })()`));
+
+  ok('90 度：格子边界在 y=0/30/60',
+     r90.on[0] === 'border' && r90.on[30] === 'border' && r90.on[60] === 'border', r90.on);
+  ok('90 度：辅助线落在半格 y=15/45', r90.on[15] === 'aux' && r90.on[45] === 'aux', r90.on);
+  ok('90 度：关掉后 y=15/45 消失', r90.off[15] === 'none' && r90.off[45] === 'none', r90.off);
+  ok('90 度：关掉后格子边界还在',
+     r90.off[0] === 'border' && r90.off[30] === 'border' && r90.off[60] === 'border', r90.off);
+
+  console.log('== 45 度网格（原版 draw45AngleGrid：矩形辅助线 + 斜线）==');
+  const r45 = JSON.parse(await E(`(function(){
+    WMNewMap({ name: 't45', mapType: 0, mapWidth: 1920, mapHeight: 1440, ceilWidth: 60, ceilHeight: 30 });
+    WMApp.layers.map = false; WMApp.layers.road = false; WMApp.layers.grid = true;
+    WMApp.view.offsetX = 0; WMApp.view.offsetY = 0; WMApp.view.zoom = 1;
+    WMApp.showAuxLine = true; WMApp.roadVersion++; WMRender();
+
+    var cv = document.getElementById('mapCanvas');
+    var d = null;
+    // 每轮 scan 前重新取一次快照 —— 复用同一个 ImageData 会读到切换前的旧像素
+    function snap() { d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; }
+    function at(mx, my) {
+      var x = Math.round(mx), y = Math.round(my);
+      if (x < 0 || y < 0 || x >= cv.width || y >= cv.height) return null;
+      var i = (y * cv.width + x) * 4;
+      return [d[i], d[i + 1], d[i + 2]];
+    }
+    // 45 度的辅助线是蓝(偶)/绿(奇)；斜线是中性亮灰，用亮度门排掉。
+    // 斜线在 y 为半格整数倍处一定落在 x 为 30 的倍数上，所以 probeX=100 不会撞到。
+    function auxKind(p) {
+      if (!p) return 0;
+      if (p[0] + p[1] + p[2] > 150) return 0;
+      var g = p[1] - p[0], b = p[2] - p[0];
+      if (b >= 8) return 2;
+      if (g >= 2 && b <= 1) return 1;
+      return 0;
+    }
+    function auxRow(mx, my) {
+      for (var k = -1; k <= 1; k++) { var v = auxKind(at(mx, my + k)); if (v) return v; }
+      return 0;
+    }
+    var probeX = 100;
+    function scan() {
+      snap();
+      var out = {};
+      [0, 15, 30, 45, 60].forEach(function (y) { out[y] = auxRow(probeX, y); });
+      return out;
+    }
+    var on = scan();
+    WMApp.showAuxLine = false; WMApp.roadVersion++; WMRender();
+    var off = scan();
+    WMApp.showAuxLine = true; WMApp.roadVersion++; WMRender();
+    return JSON.stringify({ on: on, off: off });
+  })()`));
+
+  ok('45 度：横辅助线每半格一条（0/15/30/45/60 都有）',
+     [0, 15, 30, 45, 60].every(y => r45.on[y] > 0), r45.on);
+  ok('45 度：偶数条是蓝、奇数条是绿',
+     r45.on[0] === 2 && r45.on[30] === 2 && r45.on[15] === 1 && r45.on[45] === 1, r45.on);
+  ok('45 度：关掉辅助线后全消失',
+     [0, 15, 30, 45, 60].every(y => r45.off[y] === 0), r45.off);
+
   ws.close(); ch.kill();
   console.log('\nRESULT: '+pass+' passed, '+fail+' failed');
   process.exit(fail?1:0);

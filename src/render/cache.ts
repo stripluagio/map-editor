@@ -11,7 +11,9 @@
  */
 import { MapType } from '../core/types';
 import { hexToRgba, roadRenderColor } from '../core/color';
-import { honeycombAuxLines, type AuxLine } from '../core/grid';
+import {
+  honeycombAuxLines, angle90Lines, angle45Lines, GRID_BORDER, type AuxLine,
+} from '../core/grid';
 import { state } from '../app/state';
 import { hexPath, cellPath } from './shapes';
 
@@ -72,21 +74,21 @@ function drawGridInto(ctx: CanvasRenderingContext2D): void {
   const rows = state.road.length, cols = state.road[0]?.length ?? 0;
 
   if (t === MapType.angle90) {
-    ctx.lineWidth = 1.5; ctx.strokeStyle = hexToRgba('#bbbbbbaa');
-    ctx.beginPath();
-    for (let x = 0; x <= g.col; x++) { ctx.moveTo(x * nw, 0); ctx.lineTo(x * nw, ph); }
-    for (let y = 0; y <= g.row; y++) { ctx.moveTo(0, y * nh); ctx.lineTo(pw, y * nh); }
-    ctx.stroke();
+    // 原版 draw90AngleGrid：半格间距，偶数条是格子边界、奇数条是辅助线
+    const r = angle90Lines(pw, ph, nw, nh, state.showAuxLine);
+    drawAuxLines(ctx, r.horizontal, false, pw);
+    drawAuxLines(ctx, r.vertical, true, ph);
     return;
   }
   if (t === MapType.angle45) {
-    ctx.lineWidth = 1.5; ctx.strokeStyle = hexToRgba('#bbbbbbaa');
+    // 原版 draw45AngleGrid：两族矩形辅助线（受开关控制）+ 两族斜线（始终画）
+    const r = angle45Lines(pw, ph, nw, nh, state.showAuxLine);
+    drawAuxLines(ctx, r.horizontal, false, pw);
+    drawAuxLines(ctx, r.vertical, true, ph);
+    ctx.strokeStyle = hexToRgba(GRID_BORDER);
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    const slope = nw / nh;
-    for (let i = -g.row; i <= g.col + g.row; i++) {
-      ctx.moveTo(i * nw, 0); ctx.lineTo(i * nw - ph * slope, ph);
-      ctx.moveTo(i * nw, 0); ctx.lineTo(i * nw + ph * slope, ph);
-    }
+    for (const s of r.diagonals) { ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); }
     ctx.stroke();
     return;
   }

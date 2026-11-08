@@ -7,6 +7,8 @@ import { ENTITY_SKINS, entitySize, entityRing } from './core/constants';
 import { state, exposeGlobals } from './app/state';
 import { fitStage, bindMapInput } from './app/input';
 import { createSampleMap, initDocument } from './app/document';
+import { MapParamsModel } from './core/model';
+import type { MapParams } from './core/types';
 import { action } from './app/actions';
 import { bindKeyboard } from './app/shortcuts';
 import { bindTest } from './app/playmode';
@@ -76,6 +78,8 @@ function init(): void {
     WMAction: action, WMGetMapData: getMapData, WMRender: render, WMRenderTest: renderTest,
     WMExport: { buildMapExport },
     WMCore: { entitySize, entityRing },
+    /** Test seam: build a fresh document of any map type (used by tests/e2e.cjs). */
+    WMNewMap: (o: Partial<MapParams>) => initDocument(new MapParamsModel(o), null),
   });
 }
 

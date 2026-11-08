@@ -848,6 +848,49 @@
       [x, y + l]
     ];
   }
+  var GRID_BORDER = "#bbbbbbaa";
+  function angle90Lines(mapWidth, mapHeight, nw, nh, showAux) {
+    const halfW = nw / 2, halfH = nh / 2;
+    const cols = Math.ceil(mapWidth / nw), rows = Math.ceil(mapHeight / nh);
+    const horizontal = [];
+    const vertical = [];
+    for (let n = 0; n <= 2 * rows + 1; n++) {
+      const even = n % 2 === 0;
+      if (!even && !showAux) continue;
+      horizontal.push({ pos: n * halfH, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+    }
+    for (let r = 0; r <= 2 * cols + 1; r++) {
+      const even = r % 2 === 0;
+      if (!even && !showAux) continue;
+      vertical.push({ pos: r * halfW, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+    }
+    return { horizontal, vertical, diagonals: [] };
+  }
+  function angle45Lines(mapWidth, mapHeight, nw, nh, showAux) {
+    const halfW = nw / 2, halfH = nh / 2;
+    const cols = Math.ceil(mapWidth / nw), rows = Math.ceil(mapHeight / nh);
+    const t = 2 * rows + 1, e = 2 * cols + 1;
+    const horizontal = [];
+    const vertical = [];
+    if (showAux) {
+      for (let n = 0; n <= t; n++) {
+        horizontal.push({ pos: n * halfH, color: n % 2 === 0 ? AUX_STRONG : AUX_FAINT, width: 1 });
+      }
+      for (let r = 0; r <= e; r++) {
+        vertical.push({ pos: r * halfW, color: r % 2 === 0 ? AUX_STRONG : AUX_FAINT, width: 1 });
+      }
+    }
+    const o = t * halfH;
+    const diagonals = [];
+    for (let a = 1; a < e + t; a++) {
+      if (a % 2 === 1) {
+        diagonals.push({ x1: a * halfW, y1: 0, x2: 0, y2: a * halfH });
+      } else {
+        diagonals.push({ x1: a * halfW, y1: o, x2: 0, y2: (t - a) * halfH });
+      }
+    }
+    return { horizontal, vertical, diagonals };
+  }
 
   // src/core/undo.ts
   var UndoRedo = class {
@@ -1055,30 +1098,21 @@
     const pw = state.params.mapWidth, ph = state.params.mapHeight;
     const rows = state.road.length, cols = state.road[0]?.length ?? 0;
     if (t === 1 /* angle90 */) {
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = hexToRgba("#bbbbbbaa");
-      ctx.beginPath();
-      for (let x = 0; x <= g.col; x++) {
-        ctx.moveTo(x * nw, 0);
-        ctx.lineTo(x * nw, ph);
-      }
-      for (let y = 0; y <= g.row; y++) {
-        ctx.moveTo(0, y * nh);
-        ctx.lineTo(pw, y * nh);
-      }
-      ctx.stroke();
+      const r = angle90Lines(pw, ph, nw, nh, state.showAuxLine);
+      drawAuxLines(ctx, r.horizontal, false, pw);
+      drawAuxLines(ctx, r.vertical, true, ph);
       return;
     }
     if (t === 0 /* angle45 */) {
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = hexToRgba("#bbbbbbaa");
+      const r = angle45Lines(pw, ph, nw, nh, state.showAuxLine);
+      drawAuxLines(ctx, r.horizontal, false, pw);
+      drawAuxLines(ctx, r.vertical, true, ph);
+      ctx.strokeStyle = hexToRgba(GRID_BORDER);
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      const slope = nw / nh;
-      for (let i = -g.row; i <= g.col + g.row; i++) {
-        ctx.moveTo(i * nw, 0);
-        ctx.lineTo(i * nw - ph * slope, ph);
-        ctx.moveTo(i * nw, 0);
-        ctx.lineTo(i * nw + ph * slope, ph);
+      for (const s of r.diagonals) {
+        ctx.moveTo(s.x1, s.y1);
+        ctx.lineTo(s.x2, s.y2);
       }
       ctx.stroke();
       return;
@@ -3490,7 +3524,9 @@
       WMRender: render,
       WMRenderTest: renderTest,
       WMExport: { buildMapExport },
-      WMCore: { entitySize, entityRing }
+      WMCore: { entitySize, entityRing },
+      /** Test seam: build a fresh document of any map type (used by tests/e2e.cjs). */
+      WMNewMap: (o) => initDocument(new MapParamsModel(o), null)
     });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
