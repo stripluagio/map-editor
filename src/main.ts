@@ -22,6 +22,7 @@ import { bindNewMap, bindOpenMap, paramsFromMapData } from './ui/wizard';
 import { bindViews } from './ui/views';
 import { bindOverlay } from './ui/overlay';
 import { render, resizeCanvas } from './render/canvas';
+import { layerStats } from './render/cache';
 import { renderTest, renderTestSize } from './render/playmode';
 
 function loadAssets(): void {
@@ -79,6 +80,8 @@ function init(): void {
     WMAction: action, WMGetMapData: getMapData, WMRender: render, WMRenderTest: renderTest,
     WMExport: { buildMapExport },
     WMCore: { entitySize, entityRing },
+    /** Test seam: per-layer rebuild counters (see render/cache.ts). */
+    WMLayerStats: layerStats,
     /** Test seam: build a fresh document of any map type (used by tests/e2e.cjs). */
     WMNewMap: (o: Partial<MapParams>) => initDocument(new MapParamsModel(o), null),
     /**

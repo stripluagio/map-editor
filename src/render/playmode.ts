@@ -2,9 +2,9 @@ import { MapType } from '../core/types';
 import { hexToRgba, roadRenderColor } from '../core/color';
 import { PLAYER_DRAW_OFFSET, PLAYER_FRAME_SIZE, playerFrame } from '../core/player';
 import { state } from '../app/state';
-import { getSceneLayer } from './cache';
+import { blitScene } from './cache';
 import { context2d, inView, sizeCanvas } from './context';
-import { cellPath, hexPath } from './shapes';
+import { cellPath } from './shapes';
 import { drawEntities } from './canvas';
 
 const canvas = () => document.getElementById('testCanvas') as HTMLCanvasElement;
@@ -45,8 +45,7 @@ export function renderTest(): void {
   } else { T.camX = 0; T.camY = 0; T.camReady = false; T.lastT = 0; }
   ctx.save(); ctx.translate(ox, oy);
   ctx.fillStyle = '#222'; ctx.fillRect(0, 0, pw, ph);
-  const scene = getSceneLayer();
-  if (scene && scene.width) ctx.drawImage(scene, 0, 0, pw, ph);
+  blitScene(ctx);
   if (state.layers.entity) drawEntities(ctx);
   // NOTE: the original draws nothing for a normal walk — the only path graphic
   // is `_testSeekPathGraphic`, which belongs to 查看寻路过程(F4). A yellow

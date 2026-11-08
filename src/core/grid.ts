@@ -10,14 +10,15 @@ export interface AuxLine {
 /** 原版 `GridLayer` 的辅助线配色（honeycomb / honeycomb2 共用）。 */
 export const AUX_STRONG = '#11115566';   // 40% 蓝
 /**
- * 深绿辅助线。**注意这里是「观感值」，不是原版源码里的字面值。**
+ * 深绿辅助线 = 原版 `lingColor1 = "#00550025"`（alpha = 0x25/255 = 0.145）。
  *
- * 原版 `lingColor1 = "#00550025"`，alpha = 0x25/255 = 0.145。但原版跑在 WebGL 上，
- * 实测落在黑底上的像素是 `(0,23,0)` —— 反推 alpha ≈ 0.27，正好是 `1-(1-0.145)²`
- * 的两遍叠加值（`(0,12,0)` 才是单遍 0.145 的结果）。
+ * 曾经想把它提到 0.27 让「看起来更实」，实测原版截图否掉了这个想法：
+ * 原版绿色像素里 **96% 是 `(0,12,0)`**（黑底上单遍 0.145），
+ * 只有 4% 是 `(0,23,0)` —— 那是两族辅助线在同一位置重叠、`1-(1-0.145)² = 0.269`
+ * 的结果。把 alpha 提到 0.27 会让那 96% 的线亮 1.86 倍。
  *
- * 克隆是 Canvas2D，只画一遍，用 0.145 会明显偏淡。所以直接写 0.27 让**看上去**一样：
- * 黑底上同样得到 `(0,23,0)`。要改回去的话，把 alpha 换回 `25` 即可。
+ * 「发虚」的真实原因是画布被 CSS transform 二次重采样（见 render/cache.ts 的
+ * 设备像素对齐），不是 alpha 太小。
  */
 export const AUX_FAINT = '#00550025';    // 14.5% 深绿（= 原版 lingColor1 字面值）
 
@@ -91,16 +92,42 @@ export function honeycombAuxLines(
 export function hexVertices(
   cx: number, cy: number, nw: number, nh: number, flatTop: boolean,
 ): Array<[number, number]> {
-  if (flatTop) {
-    const d = nw / 4, l = 3 * d, p = nh / 2;
-    const x = cx - nw / 2, y = cy - nh / 2;
-    return [[x + d, y], [x + l, y], [x + nw, y + p],
-            [x + l, y + nh], [x + d, y + nh], [x, y + p]];
-  }
+  const v = hexVertsInto(new Float64Array(12), cx, cy, nw, nh, flatTop);
+  const out: Array<[number, number]> = [];
+  for (let i = 0; i < 12; i += 2) out.push([v[i], v[i + 1]]);
+  return out;
+}
+
+/**
+ * Same vertices, written into a caller-owned 12-slot buffer (`[x0,y0,x1,y1,…]`).
+ *
+ * The honeycomb outline is rebuilt for every cell on the map — 2640 of them at
+ * 1920×1440 — and `hexVertices` allocates 7 arrays per call. That allocation
+ * churn, not the rasterisation, was half the cost of a grid rebuild (measured
+ * ~64 ms of ~131 ms). Reusing one buffer removes it.
+ */
+export function hexVertsInto(
+  out: Float64Array, cx: number, cy: number, nw: number, nh: number, flatTop: boolean,
+): Float64Array {
   const d = nw / 4, l = 3 * d, p = nh / 2;
-  const x = cx - nh / 2, y = cy - nw / 2;
-  return [[x, y + d], [x + p, y], [x + nh, y + d],
-          [x + nh, y + l], [x + p, y + nw], [x, y + l]];
+  if (flatTop) {
+    const x = cx - nw / 2, y = cy - nh / 2;
+    out[0] = x + d; out[1] = y;
+    out[2] = x + l; out[3] = y;
+    out[4] = x + nw; out[5] = y + p;
+    out[6] = x + l; out[7] = y + nh;
+    out[8] = x + d; out[9] = y + nh;
+    out[10] = x; out[11] = y + p;
+  } else {
+    const x = cx - nh / 2, y = cy - nw / 2;
+    out[0] = x; out[1] = y + d;
+    out[2] = x + p; out[3] = y;
+    out[4] = x + nh; out[5] = y + d;
+    out[6] = x + nh; out[7] = y + l;
+    out[8] = x + p; out[9] = y + nw;
+    out[10] = x; out[11] = y + l;
+  }
+  return out;
 }
 
 /** 格子边界色（原版 `lingColor3`）。 */

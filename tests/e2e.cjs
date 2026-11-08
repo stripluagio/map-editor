@@ -835,6 +835,63 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
              { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
   await sleep(500);
 
+  // == 图层拆分：画路点不重建网格（性能回归）==
+  // 拆之前 bg/road/grid 是一张合成图，画一笔就重画整张地图的 2640 个六边形
+  // （实测一次 30 格拖拽 894 ms）。现在三层各自缓存，这里用重建计数器直接断言
+  // "谁被重建了"，而不是靠计时（计时会飘）。
+  const ly = JSON.parse(await ev(`(function(){
+    var S = WMLayerStats;
+    function snap(){ return { bg:S.bg, hex:S.hex, grid:S.grid, road:S.road }; }
+    WMApp.layers.map = true; WMApp.layers.road = true; WMApp.layers.grid = true;
+    WMApp.showAuxLine = true;
+    var z = snap();
+    WMNewMap({ name:'ly', mapType:3, mapWidth:1920, mapHeight:1440, ceilWidth:40, ceilHeight:34.64 });
+    var a = snap();
+    for (var i = 0; i < 10; i++) WMPaintAtPixel(200 + i * 40, 200 + i * 20, 0);
+    var b = snap();
+    WMApp.showAuxLine = false; WMRender();
+    var c = snap();
+    WMApp.showAuxLine = true; WMRender();
+    var d = snap();
+    WMApp.layers.grid = false; WMRender(); WMApp.layers.grid = true; WMRender();
+    WMApp.layers.map = false; WMRender(); WMApp.layers.map = true; WMRender();
+    var e = snap();
+    WMNewMap({ name:'ly2', mapType:2, mapWidth:1920, mapHeight:1440, ceilWidth:40, ceilHeight:34.64 });
+    var f = snap();
+    // 顺手确认路点真的画出来了（拆层不能只快不对）
+    WMNewMap({ name:'ly3', mapType:1, mapWidth:600, mapHeight:400, ceilWidth:60, ceilHeight:30 });
+    WMApp.layers.map = false; WMApp.layers.grid = false; WMApp.layers.road = true;
+    WMApp.view.zoom = 1; WMApp.view.offsetX = 0; WMApp.view.offsetY = 0;
+    WMApp.brushSize = 0;
+    // 前面的「设置」用例可能改过路点颜色，这里钉回默认的绿色，避免用例顺序影响
+    WMApp.setting.roadSetDatas[0].color = '#00ff0065';
+    WMPaintAtPixel(90, 45, 0);
+    WMRender();
+    var cv = document.getElementById('mapCanvas');
+    var k = cv.width / parseFloat(cv.style.width);
+    var px = cv.getContext('2d').getImageData(Math.round(90 * k), Math.round(45 * k), 1, 1).data;
+    return JSON.stringify({ z:z, a:a, b:b, c:c, d:d, e:e, f:f,
+                            cell: WMApp.road[1] ? WMApp.road[1][1] : 'n/a',
+                            painted:[px[0], px[1], px[2], px[3]] });
+  })()`));
+
+  eq('建图时 hex 层重建一次', ly.a.hex - ly.z.hex, 1);
+  eq('画 10 格只重建 road 层（10 次）', ly.b.road - ly.a.road, 10);
+  ok('画 10 格不重建 hex 层（曾经每次重画 2640 个六边形）', ly.b.hex === ly.a.hex, ly.b);
+  ok('画 10 格不重建 grid 层', ly.b.grid === ly.a.grid, ly.b);
+  ok('画 10 格不重建 bg 层', ly.b.bg === ly.a.bg, ly.b);
+  eq('关辅助线：grid 层不重建（直接贴 hex 层）', ly.c.grid, ly.b.grid);
+  ok('关辅助线不重建 hex 层（六边形是独立一层）', ly.c.hex === ly.b.hex, ly.c);
+  eq('再开辅助线：仍然命中缓存，不重建', ly.d.grid, ly.c.grid);
+  ok('开关辅助线两次都不碰 hex', ly.d.hex === ly.b.hex, ly.d);
+  ok('图层显隐完全不触发重建（只是少贴一张）',
+     ly.e.bg === ly.d.bg && ly.e.hex === ly.d.hex
+     && ly.e.grid === ly.d.grid && ly.e.road === ly.d.road, ly.e);
+  ok('换地图类型才重建 hex 层', ly.f.hex - ly.e.hex >= 1, ly.f);
+  eq('路点值写进了 road 数组', ly.cell, 0);
+  ok('路点仍然画得出来（绿色行走路点，拆层后像素不变）',
+     ly.painted[1] > 120 && ly.painted[3] > 0, ly.painted);
+
   ws.close(); ch.kill();
   console.log('\nRESULT: '+pass+' passed, '+fail+' failed');
   process.exit(fail?1:0);

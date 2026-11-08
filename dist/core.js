@@ -54,6 +54,7 @@
     findPath: () => findPath,
     hexToRgba: () => hexToRgba,
     hexVertices: () => hexVertices,
+    hexVertsInto: () => hexVertsInto,
     honeycombAuxLines: () => honeycombAuxLines,
     normalizeEntity: () => normalizeEntity,
     optimizePath: () => optimizePath,
@@ -910,28 +911,43 @@
     };
   }
   function hexVertices(cx, cy, nw, nh, flatTop) {
-    if (flatTop) {
-      const d2 = nw / 4, l2 = 3 * d2, p2 = nh / 2;
-      const x2 = cx - nw / 2, y2 = cy - nh / 2;
-      return [
-        [x2 + d2, y2],
-        [x2 + l2, y2],
-        [x2 + nw, y2 + p2],
-        [x2 + l2, y2 + nh],
-        [x2 + d2, y2 + nh],
-        [x2, y2 + p2]
-      ];
-    }
+    const v = hexVertsInto(new Float64Array(12), cx, cy, nw, nh, flatTop);
+    const out = [];
+    for (let i = 0; i < 12; i += 2) out.push([v[i], v[i + 1]]);
+    return out;
+  }
+  function hexVertsInto(out, cx, cy, nw, nh, flatTop) {
     const d = nw / 4, l = 3 * d, p = nh / 2;
-    const x = cx - nh / 2, y = cy - nw / 2;
-    return [
-      [x, y + d],
-      [x + p, y],
-      [x + nh, y + d],
-      [x + nh, y + l],
-      [x + p, y + nw],
-      [x, y + l]
-    ];
+    if (flatTop) {
+      const x = cx - nw / 2, y = cy - nh / 2;
+      out[0] = x + d;
+      out[1] = y;
+      out[2] = x + l;
+      out[3] = y;
+      out[4] = x + nw;
+      out[5] = y + p;
+      out[6] = x + l;
+      out[7] = y + nh;
+      out[8] = x + d;
+      out[9] = y + nh;
+      out[10] = x;
+      out[11] = y + p;
+    } else {
+      const x = cx - nh / 2, y = cy - nw / 2;
+      out[0] = x;
+      out[1] = y + d;
+      out[2] = x + p;
+      out[3] = y;
+      out[4] = x + nh;
+      out[5] = y + d;
+      out[6] = x + nh;
+      out[7] = y + l;
+      out[8] = x + p;
+      out[9] = y + nw;
+      out[10] = x;
+      out[11] = y + l;
+    }
+    return out;
   }
   var GRID_BORDER = "#bbbbbbaa";
   function angle90Lines(mapWidth, mapHeight, nw, nh, showAux) {

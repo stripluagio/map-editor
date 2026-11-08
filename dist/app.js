@@ -636,10 +636,10 @@
         d[0] = last;
         let i = 0;
         for (; ; ) {
-          const l = 2 * i + 1, r2 = l + 1;
+          const l = 2 * i + 1, r22 = l + 1;
           let m = i;
           if (l < d.length && this.score(d[l]) < this.score(d[m])) m = l;
-          if (r2 < d.length && this.score(d[r2]) < this.score(d[m])) m = r2;
+          if (r22 < d.length && this.score(d[r22]) < this.score(d[m])) m = r22;
           if (m === i) break;
           [d[m], d[i]] = [d[i], d[m]];
           i = m;
@@ -828,28 +828,43 @@
     };
   }
   function hexVertices(cx, cy, nw, nh, flatTop) {
-    if (flatTop) {
-      const d2 = nw / 4, l2 = 3 * d2, p2 = nh / 2;
-      const x2 = cx - nw / 2, y2 = cy - nh / 2;
-      return [
-        [x2 + d2, y2],
-        [x2 + l2, y2],
-        [x2 + nw, y2 + p2],
-        [x2 + l2, y2 + nh],
-        [x2 + d2, y2 + nh],
-        [x2, y2 + p2]
-      ];
-    }
+    const v = hexVertsInto(new Float64Array(12), cx, cy, nw, nh, flatTop);
+    const out = [];
+    for (let i = 0; i < 12; i += 2) out.push([v[i], v[i + 1]]);
+    return out;
+  }
+  function hexVertsInto(out, cx, cy, nw, nh, flatTop) {
     const d = nw / 4, l = 3 * d, p = nh / 2;
-    const x = cx - nh / 2, y = cy - nw / 2;
-    return [
-      [x, y + d],
-      [x + p, y],
-      [x + nh, y + d],
-      [x + nh, y + l],
-      [x + p, y + nw],
-      [x, y + l]
-    ];
+    if (flatTop) {
+      const x = cx - nw / 2, y = cy - nh / 2;
+      out[0] = x + d;
+      out[1] = y;
+      out[2] = x + l;
+      out[3] = y;
+      out[4] = x + nw;
+      out[5] = y + p;
+      out[6] = x + l;
+      out[7] = y + nh;
+      out[8] = x + d;
+      out[9] = y + nh;
+      out[10] = x;
+      out[11] = y + p;
+    } else {
+      const x = cx - nh / 2, y = cy - nw / 2;
+      out[0] = x;
+      out[1] = y + d;
+      out[2] = x + p;
+      out[3] = y;
+      out[4] = x + nh;
+      out[5] = y + d;
+      out[6] = x + nh;
+      out[7] = y + l;
+      out[8] = x + p;
+      out[9] = y + nw;
+      out[10] = x;
+      out[11] = y + l;
+    }
+    return out;
   }
   var GRID_BORDER = "#bbbbbbaa";
   function angle90Lines(mapWidth, mapHeight, nw, nh, showAux) {
@@ -1051,6 +1066,33 @@
     }
   }
 
+  // src/render/gridpath.ts
+  var cache = null;
+  var buf = new Float64Array(12);
+  var r2 = (v) => Math.round(v * 100) / 100;
+  function hexOutlinePath(g, cols, rows) {
+    const flatTop = g.mapType === 2 /* honeycomb */;
+    const sig = [g.mapType, cols, rows, g.nodeWidth, g.nodeHeight].join("|");
+    if (cache && cache.sig === sig) return cache.path;
+    const nw = g.nodeWidth, nh = g.nodeHeight;
+    const parts = [];
+    for (let dy = 0; dy < rows; dy++) {
+      for (let dx = 0; dx < cols; dx++) {
+        const c = g.cellCenter(dx, dy);
+        hexVertsInto(buf, c.x, c.y, nw, nh, flatTop);
+        let s = "M" + r2(buf[0]) + " " + r2(buf[1]);
+        for (let i = 2; i < 12; i += 2) s += "L" + r2(buf[i]) + " " + r2(buf[i + 1]);
+        parts.push(s + "Z");
+      }
+    }
+    const path = new Path2D(parts.join(""));
+    cache = { sig, path };
+    return path;
+  }
+  function invalidateHexPath() {
+    cache = null;
+  }
+
   // src/render/context.ts
   var logical = /* @__PURE__ */ new WeakMap();
   function logicalSize(cv) {
@@ -1084,67 +1126,105 @@
   }
 
   // src/render/cache.ts
-  var sceneCanvas = document.createElement("canvas");
-  var sceneSignature = "";
+  var bgLayer = { cv: document.createElement("canvas"), sig: "" };
+  var hexLayer = { cv: document.createElement("canvas"), sig: "" };
+  var gridLayer = { cv: document.createElement("canvas"), sig: "" };
+  var roadLayer = { cv: document.createElement("canvas"), sig: "" };
+  var layerStats = { bg: 0, hex: 0, grid: 0, road: 0 };
   function sceneDeviceScale() {
     const cv = document.getElementById("mapCanvas");
     if (!cv || !cv.width) return 1;
     const L = logicalSize(cv);
     return cv.width / Math.max(1, L.w);
   }
-  function sceneSig() {
-    const p = state.params;
-    if (!p) return "";
-    return [
-      p.mapType,
-      p.mapWidth,
-      p.mapHeight,
-      p.ceilWidth,
-      p.ceilHeight,
-      p.bgSrc || "",
-      state.layers.map ? 1 : 0,
-      state.layers.road ? 1 : 0,
-      state.layers.grid ? 1 : 0,
-      state.showAuxLine ? 1 : 0,
-      state.roadVersion,
-      state.painted.size,
-      state.setting.roadSetDatas.map((d) => d.color).join(",")
-    ].join("|");
+  function begin(L, sig, bw, bh) {
+    if (L.sig === sig && L.cv.width === bw && L.cv.height === bh) return { ctx: null, hit: true };
+    if (L.cv.width !== bw) L.cv.width = bw;
+    if (L.cv.height !== bh) L.cv.height = bh;
+    const ctx = L.cv.getContext("2d");
+    if (!ctx) return { ctx: null, hit: false };
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, bw, bh);
+    L.sig = sig;
+    return { ctx, hit: false };
   }
-  function getSceneLayer() {
+  function geoKey(p) {
+    return [p.mapType, p.mapWidth, p.mapHeight, p.ceilWidth, p.ceilHeight].join("|");
+  }
+  function layerSize(p, k) {
+    return {
+      bw: Math.max(1, Math.round(p.mapWidth * k)),
+      bh: Math.max(1, Math.round(p.mapHeight * k))
+    };
+  }
+  function blitScene(ctx) {
     const p = state.params;
-    if (!p) return null;
+    if (!p) return;
     const k = sceneDeviceScale();
-    const sig = sceneSig() + "|" + k.toFixed(4);
-    if (sig === sceneSignature && sceneCanvas.width) return sceneCanvas;
-    const bw = Math.max(1, Math.round(p.mapWidth * k));
-    const bh = Math.max(1, Math.round(p.mapHeight * k));
-    if (sceneCanvas.width !== bw) sceneCanvas.width = bw;
-    if (sceneCanvas.height !== bh) sceneCanvas.height = bh;
-    const ctx = sceneCanvas.getContext("2d");
-    if (!ctx) return null;
-    ctx.setTransform(bw / p.mapWidth, 0, 0, bh / p.mapHeight, 0, 0);
-    ctx.clearRect(0, 0, p.mapWidth, p.mapHeight);
-    if (state.layers.map && p.bgImage && p.bgImage.complete) {
+    const { bw, bh } = layerSize(p, k);
+    const bg = getBgLayer(p, bw, bh);
+    if (bg) ctx.drawImage(bg, 0, 0, p.mapWidth, p.mapHeight);
+    const road = getRoadLayer(p, bw, bh);
+    if (road) ctx.drawImage(road, 0, 0, p.mapWidth, p.mapHeight);
+    const grid = getGridLayer(p, bw, bh);
+    if (grid) ctx.drawImage(grid, 0, 0, p.mapWidth, p.mapHeight);
+  }
+  function invalidateScene() {
+    bgLayer.sig = hexLayer.sig = gridLayer.sig = roadLayer.sig = "\0";
+    invalidateHexPath();
+  }
+  var invalidateAll = invalidateScene;
+  function getBgLayer(p, bw, bh) {
+    if (!state.layers.map) return null;
+    const img = p.bgImage;
+    if (!img || !img.complete || !img.naturalWidth) return null;
+    const r = begin(bgLayer, "bg|" + (p.bgSrc || "") + "|" + bw + "x" + bh, bw, bh);
+    if (!r.hit) {
+      layerStats.bg++;
+      if (!r.ctx) return null;
+      r.ctx.setTransform(bw / p.mapWidth, 0, 0, bh / p.mapHeight, 0, 0);
       try {
-        ctx.drawImage(p.bgImage, 0, 0, p.mapWidth, p.mapHeight);
+        r.ctx.drawImage(img, 0, 0, p.mapWidth, p.mapHeight);
       } catch {
       }
     }
-    if (state.layers.road) drawRoadInto(ctx);
-    if (state.layers.grid) drawGridInto(ctx, bw / p.mapWidth);
-    sceneSignature = sig;
-    return sceneCanvas;
+    return bgLayer.cv;
   }
-  function invalidateScene() {
-    sceneSignature = "\0";
+  function getHexLayer(p, bw, bh) {
+    if (p.mapType !== 2 /* honeycomb */ && p.mapType !== 3 /* honeycomb2 */) return null;
+    const g = state.geom;
+    const rows = state.road.length, cols = state.road[0]?.length ?? 0;
+    if (!rows || !cols) return null;
+    const sig = "hex|" + geoKey(p) + "|" + cols + "x" + rows + "|" + bw + "x" + bh;
+    const r = begin(hexLayer, sig, bw, bh);
+    if (!r.hit) {
+      layerStats.hex++;
+      if (!r.ctx) return null;
+      r.ctx.setTransform(bw / p.mapWidth, 0, 0, bh / p.mapHeight, 0, 0);
+      r.ctx.lineWidth = 1.5;
+      r.ctx.strokeStyle = hexToRgba(GRID_BORDER);
+      r.ctx.stroke(hexOutlinePath(g, cols, rows));
+    }
+    return hexLayer.cv;
   }
-  var invalidateAll = invalidateScene;
-  function drawGridInto(ctx, k) {
+  function getGridLayer(p, bw, bh) {
+    if (!state.layers.grid) return null;
+    const hex = getHexLayer(p, bw, bh);
+    if (hex && !state.showAuxLine) return hex;
+    const sig = "grid|" + geoKey(p) + "|" + (state.showAuxLine ? 1 : 0) + "|" + bw + "x" + bh;
+    const r = begin(gridLayer, sig, bw, bh);
+    if (!r.hit) {
+      layerStats.grid++;
+      if (!r.ctx) return null;
+      r.ctx.setTransform(bw / p.mapWidth, 0, 0, bh / p.mapHeight, 0, 0);
+      drawGridInto(r.ctx, bw / p.mapWidth, hex);
+    }
+    return gridLayer.cv;
+  }
+  function drawGridInto(ctx, k, hex) {
     const g = state.geom, t = g.mapType;
     const nw = g.nodeWidth, nh = g.nodeHeight;
     const pw = state.params.mapWidth, ph = state.params.mapHeight;
-    const rows = state.road.length, cols = state.road[0]?.length ?? 0;
     if (t === 1 /* angle90 */) {
       const r = angle90Lines(pw, ph, nw, nh, state.showAuxLine);
       drawAuxLines(ctx, r.horizontal, false, pw, k);
@@ -1170,16 +1250,7 @@
       drawAuxLines(ctx, aux.vertical, true, ph, k);
       drawAuxLines(ctx, aux.horizontal, false, pw, k);
     }
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = hexToRgba("#bbbbbbaa");
-    ctx.beginPath();
-    for (let dy = 0; dy < rows; dy++) {
-      for (let dx = 0; dx < cols; dx++) {
-        const c = g.cellCenter(dx, dy);
-        hexPath(ctx, c.x, c.y, nw, nh, t === 2 /* honeycomb */);
-      }
-    }
-    ctx.stroke();
+    if (hex && hex.width) ctx.drawImage(hex, 0, 0, pw, ph);
   }
   function drawAuxLines(ctx, lines, vertical, span, k) {
     const buckets = /* @__PURE__ */ new Map();
@@ -1211,19 +1282,37 @@
       ctx.stroke();
     }
   }
+  function getRoadLayer(p, bw, bh) {
+    if (!state.layers.road) return null;
+    const sets = state.setting.roadSetDatas;
+    const sig = "road|" + geoKey(p) + "|" + bw + "x" + bh + "|" + state.roadVersion + "|" + state.painted.size + "|" + sets.map((d) => d && d.color).join(",");
+    const r = begin(roadLayer, sig, bw, bh);
+    if (!r.hit) {
+      layerStats.road++;
+      if (!r.ctx) return null;
+      r.ctx.setTransform(bw / p.mapWidth, 0, 0, bh / p.mapHeight, 0, 0);
+      drawRoadInto(r.ctx);
+    }
+    return roadLayer.cv;
+  }
   function drawRoadInto(ctx) {
     const sets = state.setting.roadSetDatas;
     const g = state.geom, t = g.mapType;
     const cols = state.road[0]?.length || 1;
-    for (let v = 0; v < sets.length; v++) {
+    const buckets = sets.map(() => []);
+    for (const key of state.painted) {
+      const dy = Math.floor(key / cols), dx = key % cols;
+      const v = state.road[dy]?.[dx];
+      if (v === void 0 || v < 0 || v >= buckets.length) continue;
+      buckets[v].push(key);
+    }
+    for (let v = 0; v < buckets.length; v++) {
       const s = sets[v];
-      if (!s) continue;
+      if (!s || !buckets[v].length) continue;
       ctx.fillStyle = roadRenderColor(v, s.color);
       ctx.beginPath();
-      let any = false;
-      for (const key of state.painted) {
+      for (const key of buckets[v]) {
         const dy = Math.floor(key / cols), dx = key % cols;
-        if (state.road[dy]?.[dx] !== v) continue;
         const c = g.cellCenter(dx, dy);
         cellPath(
           ctx,
@@ -1235,9 +1324,8 @@
           g.halfNodeHeight,
           t
         );
-        any = true;
       }
-      if (any) ctx.fill();
+      ctx.fill();
     }
   }
 
@@ -1339,8 +1427,7 @@
     ctx.save();
     ctx.translate(state.view.offsetX, state.view.offsetY);
     ctx.scale(z, z);
-    const scene = getSceneLayer();
-    if (scene && scene.width) ctx.drawImage(scene, 0, 0, p.mapWidth, p.mapHeight);
+    blitScene(ctx);
     if (state.layers.entity) drawEntities(ctx);
     if (state.pathPreview && state.pathPreview.length) drawPathPreview(ctx);
     if (state.cursorNode && state.mode === "edit") drawBrushFocus(ctx);
@@ -1349,6 +1436,7 @@
     if (state.activeView === "miniMap") drawMiniMap();
   }
   function drawEntities(ctx) {
+    if (!state.entities.length && !state.brushEntity) return;
     const now = Date.now();
     const list = state.entities.slice().sort((a, b) => (Number(b.y) || 0) - (Number(a.y) || 0));
     if (state.brushEntity) list.push(state.brushEntity);
@@ -1465,15 +1553,32 @@
     }
     ctx.fill();
   }
+  var sbW = -1;
+  var sbH = -1;
+  var sbX = -1;
+  var sbY = -1;
   function updateScrollBars(W, H, pw, ph, z) {
     const sw = Math.min(1, W / (pw * z)), sh = Math.min(1, H / (ph * z));
     const tw = Math.max(30, sw * W), th = Math.max(30, sh * H);
-    const tx = -state.view.offsetX / (pw * z) * W, ty = -state.view.offsetY / (ph * z) * H;
+    const tx = Math.max(0, Math.min(W - tw, -state.view.offsetX / (pw * z) * W));
+    const ty = Math.max(0, Math.min(H - th, -state.view.offsetY / (ph * z) * H));
     const hb = el("hScrollThumb"), vb = el("vScrollThumb");
-    hb.style.width = tw + "px";
-    hb.style.left = Math.max(0, Math.min(W - tw, tx)) + "px";
-    vb.style.height = th + "px";
-    vb.style.top = Math.max(0, Math.min(H - th, ty)) + "px";
+    if (tw !== sbW) {
+      hb.style.width = tw + "px";
+      sbW = tw;
+    }
+    if (tx !== sbX) {
+      hb.style.left = tx + "px";
+      sbX = tx;
+    }
+    if (th !== sbH) {
+      vb.style.height = th + "px";
+      sbH = th;
+    }
+    if (ty !== sbY) {
+      vb.style.top = ty + "px";
+      sbY = ty;
+    }
   }
 
   // src/ui/dom.ts
@@ -2025,8 +2130,7 @@
     ctx.translate(ox, oy);
     ctx.fillStyle = "#222";
     ctx.fillRect(0, 0, pw, ph);
-    const scene = getSceneLayer();
-    if (scene && scene.width) ctx.drawImage(scene, 0, 0, pw, ph);
+    blitScene(ctx);
     if (state.layers.entity) drawEntities(ctx);
     if (T.showPath) drawSeek(ctx);
     drawPlayer(ctx, p);
@@ -3578,6 +3682,8 @@
       WMRenderTest: renderTest,
       WMExport: { buildMapExport },
       WMCore: { entitySize, entityRing },
+      /** Test seam: per-layer rebuild counters (see render/cache.ts). */
+      WMLayerStats: layerStats,
       /** Test seam: build a fresh document of any map type (used by tests/e2e.cjs). */
       WMNewMap: (o) => initDocument(new MapParamsModel(o), null),
       /**

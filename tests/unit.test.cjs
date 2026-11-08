@@ -231,6 +231,16 @@ ok('pointy-top apexes are x-centred',
 ok('flat-top apexes are y-centred',
    near(Vf[2][1], 100) && near(Vf[5][1], 100), [Vf[2], Vf[5]]);
 
+// hexVertsInto is the allocation-free twin used by the renderer's cached Path2D.
+// It must produce exactly the same 12 numbers, in the same order.
+const bufP = C.hexVertsInto(new Float64Array(12), 100, 100, HW, HH, false);
+const bufF = C.hexVertsInto(new Float64Array(12), 100, 100, HW, HH, true);
+const joinNums = v => Array.from(v).map(n => +n.toFixed(6)).join(',');
+ok('hexVertsInto(pointy-top) === hexVertices(pointy-top)',
+   joinNums(bufP) === joinNums(Vp.flat()), joinNums(bufP));
+ok('hexVertsInto(flat-top) === hexVertices(flat-top)',
+   joinNums(bufF) === joinNums(Vf.flat()), joinNums(bufF));
+
 console.log('== 90 度网格（原版 draw90AngleGrid：半格间距）==');
 // 60x30 格子 + 1920x1440 地图 -> cols=32, rows=48
 const N90 = C.angle90Lines(1920, 1440, 60, 30, true);

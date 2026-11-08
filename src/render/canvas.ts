@@ -3,9 +3,9 @@ import type { MapItem } from '../core/types';
 import { hexToRgba, roadRenderColor, entityColor } from '../core/color';
 import { TYPE_LABEL, ENTITY_SKINS, entityRing } from '../core/constants';
 import { state } from '../app/state';
-import { getSceneLayer } from './cache';
+import { blitScene } from './cache';
 import { context2d, inView, sizeCanvas } from './context';
-import { cellPath, hexPath } from './shapes';
+import { cellPath } from './shapes';
 import { drawMiniMap } from './minimap';
 
 const el = (id: string) => document.getElementById(id) as HTMLElement;
@@ -68,10 +68,9 @@ export function render(): void {
   ctx.save();
   ctx.translate(state.view.offsetX, state.view.offsetY);
   ctx.scale(z, z);
-  // Single blit: background + road + grid are composited off-screen.
-  const scene = getSceneLayer();
-  // 场景层是设备分辨率的位图，必须按地图尺寸（app 单位）贴回去，否则会被放大 k 倍。
-  if (scene && scene.width) ctx.drawImage(scene, 0, 0, p.mapWidth, p.mapHeight);
+  // Background / road / grid are three separately cached layers; each is a
+  // device-resolution bitmap blitted 1:1 in map units (see render/cache.ts).
+  blitScene(ctx);
   if (state.layers.entity) drawEntities(ctx);
   if (state.pathPreview && state.pathPreview.length) drawPathPreview(ctx);
   if (state.cursorNode && state.mode === 'edit') drawBrushFocus(ctx);
@@ -82,6 +81,7 @@ export function render(): void {
 }
 
 export function drawEntities(ctx: CanvasRenderingContext2D): void {
+  if (!state.entities.length && !state.brushEntity) return;
   const now = Date.now();
   // Original EntityLayer.setDepthRand: sort by y descending so lower entities
   // are drawn on top.
@@ -171,11 +171,22 @@ function drawBrushFocus(ctx: CanvasRenderingContext2D): void {
   ctx.fill();
 }
 
+/**
+ * Scrollbar thumbs.
+ *
+ * Guarded by a cache: `render()` runs on every mousemove during a pan, and
+ * writing four inline styles per frame forced a style/layout flush each time for
+ * values that usually do not change.
+ */
+let sbW = -1, sbH = -1, sbX = -1, sbY = -1;
 function updateScrollBars(W: number, H: number, pw: number, ph: number, z: number): void {
   const sw = Math.min(1, W / (pw * z)), sh = Math.min(1, H / (ph * z));
   const tw = Math.max(30, sw * W), th = Math.max(30, sh * H);
-  const tx = (-state.view.offsetX / (pw * z)) * W, ty = (-state.view.offsetY / (ph * z)) * H;
+  const tx = Math.max(0, Math.min(W - tw, (-state.view.offsetX / (pw * z)) * W));
+  const ty = Math.max(0, Math.min(H - th, (-state.view.offsetY / (ph * z)) * H));
   const hb = el('hScrollThumb'), vb = el('vScrollThumb');
-  hb.style.width = tw + 'px'; hb.style.left = Math.max(0, Math.min(W - tw, tx)) + 'px';
-  vb.style.height = th + 'px'; vb.style.top = Math.max(0, Math.min(H - th, ty)) + 'px';
+  if (tw !== sbW) { hb.style.width = tw + 'px'; sbW = tw; }
+  if (tx !== sbX) { hb.style.left = tx + 'px'; sbX = tx; }
+  if (th !== sbH) { vb.style.height = th + 'px'; sbH = th; }
+  if (ty !== sbY) { vb.style.top = ty + 'px'; sbY = ty; }
 }
