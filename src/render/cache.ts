@@ -128,10 +128,16 @@ function drawAuxLines(
   for (const b of buckets.values()) {
     ctx.strokeStyle = hexToRgba(b.color);
     ctx.lineWidth = b.width;
+    // A 1px stroke centred on an integer coordinate straddles two device rows at
+    // half alpha, so the thin auxiliary lines came out dim and soft: the green
+    // `#00550025` line measured (32,38,32) twice instead of one row at (29,41,29).
+    // The original renders it as a single crisp row, so nudge by half a pixel.
+    const snap = b.width === 1 ? 0.5 : 0;
     ctx.beginPath();
     for (const p of b.pos) {
-      if (vertical) { ctx.moveTo(p, 0); ctx.lineTo(p, span); }
-      else { ctx.moveTo(0, p); ctx.lineTo(span, p); }
+      const q = p + snap;
+      if (vertical) { ctx.moveTo(q, 0); ctx.lineTo(q, span); }
+      else { ctx.moveTo(0, q); ctx.lineTo(span, q); }
     }
     ctx.stroke();
   }

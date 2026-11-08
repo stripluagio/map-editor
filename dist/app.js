@@ -1147,14 +1147,16 @@
     for (const b of buckets.values()) {
       ctx.strokeStyle = hexToRgba(b.color);
       ctx.lineWidth = b.width;
+      const snap = b.width === 1 ? 0.5 : 0;
       ctx.beginPath();
       for (const p of b.pos) {
+        const q = p + snap;
         if (vertical) {
-          ctx.moveTo(p, 0);
-          ctx.lineTo(p, span);
+          ctx.moveTo(q, 0);
+          ctx.lineTo(q, span);
         } else {
-          ctx.moveTo(0, p);
-          ctx.lineTo(span, p);
+          ctx.moveTo(0, q);
+          ctx.lineTo(span, q);
         }
       }
       ctx.stroke();
