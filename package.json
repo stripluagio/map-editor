@@ -1,0 +1,20 @@
+{
+  "name": "webmobileclone",
+  "version": "2.0.0",
+  "private": true,
+  "description": "1:1 复刻 Cocos Creator 2.x EasyMapEditor (web-mobile) 的 UI 与功能 — TypeScript 模块化版",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch",
+    "test": "node tests/unit.test.cjs && node tests/e2e.cjs",
+    "test:unit": "node tests/unit.test.cjs",
+    "test:e2e": "node tests/e2e.cjs",
+    "serve": "python -m http.server 8900 --bind 127.0.0.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.3"
+  }
+}

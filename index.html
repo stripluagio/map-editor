@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Cocos Creator | EasyMapEditor</title>
+<meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1">
+<link rel="stylesheet" href="dist/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- ======================= EDIT UI ======================= -->
+  <div id="editUI">
+    <div id="bar">
+      <!-- MenuBar: 文件 编辑 命令 窗口 帮助 -->
+      <div id="menuBar" class="menu-bar">
+        <div class="menu-item" data-menu="file">文件</div>
+        <div class="menu-item" data-menu="edit">编辑</div>
+        <div class="menu-item" data-menu="command">命令</div>
+        <div class="menu-item" data-menu="window">窗口</div>
+        <div class="menu-item" data-menu="help">帮助</div>
+        <div id="menuPanel" class="menu-panel"></div>
+      </div>
+      <!-- ToolBar 1 -->
+      <div id="toolBar1" class="tool-bar"></div>
+      <!-- ToolBar 2 -->
+      <div id="toolBar2" class="tool-bar"></div>
+      <!-- InfoBar -->
+      <div id="infoBar" class="info-bar">
+        <div class="info-text"><span class="info-title">像素坐标</span><span class="info-content" id="infoPixel">（0,0）</span></div>
+        <div class="info-text"><span class="info-title">网格坐标</span><span class="info-content" id="infoGrid">（0,0）</span></div>
+        <div class="info-text"><span class="info-title">世界坐标</span><span class="info-content" id="infoWorld">（0,0）</span></div>
+      </div>
+    </div>
+
+    <!-- EditContent: left anchor / center / right anchor -->
+    <div id="editContent">
+      <!-- LeftAnchor + EditToolPanel -->
+      <div id="leftAnchor">
+        <div id="toolPanel">
+          <div id="toolTitle" class="panel-title">编辑路点</div>
+          <div id="toolContent" class="tool-content"></div>
+        </div>
+      </div>
+      <!-- CenterAnchor / EditAreaView -->
+      <div id="centerAnchor">
+        <div id="editAreaView">
+          <canvas id="mapCanvas"></canvas>
+          <div id="brushCursor"></div>
+        </div>
+        <div id="hScrollBar" class="scroll-bar-h"><div id="hScrollThumb"></div></div>
+        <div id="vScrollBar" class="scroll-bar-v"><div id="vScrollThumb"></div></div>
+      </div>
+      <!-- RightAnchor + PropertyPanel -->
+      <div id="rightAnchor">
+        <div id="propertyPanel">
+          <div class="panel-title"><span id="propertyTitle">属性面板</span><span class="prop-dot">.</span><span id="propertyName"></span></div>
+          <div id="propertyContent" class="property-content"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= TEST / PLAY VIEW ======================= -->
+  <div id="testView" class="hidden">
+    <div id="testTitleBar" class="test-title-bar"><span>测试地图</span><span class="test-close" id="testCloseBtn">关闭</span></div>
+    <div id="testToolBar" class="test-tool-bar"></div>
+    <div id="testInfoBar" class="info-bar">
+      <div class="info-text"><span class="info-title">像素坐标</span><span class="info-content" id="testInfoPixel">（0,0）</span></div>
+      <div class="info-text"><span class="info-title">网格坐标</span><span class="info-content" id="testInfoGrid">（0,0）</span></div>
+      <div class="info-text"><span class="info-title">世界坐标</span><span class="info-content" id="testInfoWorld">（0,0）</span></div>
+    </div>
+    <div id="testStage"><canvas id="testCanvas"></canvas></div>
+    <div id="testFps">FPS 60</div>
+  </div>
+
+  <!-- ======================= MODAL VIEWS ======================= -->
+  <div id="modalLayer">
+    <!-- NewMapView -->
+    <div id="newMapView" class="view hidden" data-view="newMap">
+      <div class="view-title"><span class="view-title-txt">新建地图</span><span class="view-close" data-close="newMap">关闭</span></div>
+      <div class="view-content newmap-content">
+        <div class="nm-row nm-r1">
+          <div class="nm-field"><span class="nm-label">地图名称</span><input class="nm-input" id="nmName" value="未命名"></div>
+          <div class="nm-field nm-right"><span class="nm-label nm-type-label">地图类型</span>
+            <div class="nm-toggles" id="nmToggles"></div>
+          </div>
+          <div class="nm-preview"><div class="nm-preview-title">地图预览</div><canvas id="nmGridPreview" width="280" height="280"></canvas></div>
+        </div>
+        <div class="nm-row nm-r2">
+          <div class="nm-field"><span class="nm-label">地图宽度</span><input class="nm-input" id="nmWidth"></div>
+          <div class="nm-field"><span class="nm-label">地图高度</span><input class="nm-input" id="nmHeight"></div>
+        </div>
+        <div class="nm-row nm-r3">
+          <div class="nm-field"><span class="nm-label">路点宽度</span><input class="nm-input" id="nmRoadW" value="60"></div>
+          <div class="nm-field"><span class="nm-label">路点高度</span><input class="nm-input" id="nmRoadH" value="30"></div>
+          <label class="nm-check"><input type="checkbox" id="nmRegular"><span>正六边形</span></label>
+        </div>
+        <div id="nmDetail" class="nm-detail hidden">备注：六边形路点的宽指的是两个对角之间的距离，高指的是两个对边的距离</div>
+        <div class="nm-row nm-r4">
+          <span class="nm-label">选择底图</span><input class="nm-input nm-path" id="nmBgPath" readonly>
+          <button class="nm-browse" id="nmBrowseBtn">浏览</button>
+          <input type="file" id="nmBgFile" accept="image/*" hidden>
+        </div>
+        <div class="nm-row nm-buttons">
+          <button class="nm-btn" id="nmConfirmBtn">确定</button>
+          <button class="nm-btn" id="nmCancelBtn">取消</button>
+        </div>
+        <div class="nm-help">如果使用中遇到问题可联系作者：QQ 583051842</div>
+      </div>
+    </div>
+
+    <!-- OpenMapView -->
+    <div id="openMapView" class="view hidden" data-view="openMap">
+      <div class="view-title"><span class="view-title-txt">打开地图</span><span class="view-close" data-close="openMap">关闭</span></div>
+      <div class="view-content openmap-content">
+        <div class="om-detail">选择一个编辑过的地图数据文件（json）并且选择对应的底图</div>
+        <div class="nm-row"><span class="nm-label">选择地图数据</span><input class="nm-input nm-path" id="omDataPath" readonly><button class="nm-browse" id="omDataBrowse">浏览</button><input type="file" id="omDataFile" accept=".json,application/json" hidden></div>
+        <div class="nm-row"><span class="nm-label">选择底图</span><input class="nm-input nm-path" id="omBgPath" readonly><button class="nm-browse" id="omBgBrowse">浏览</button><input type="file" id="omBgFile" accept="image/*" hidden></div>
+        <div class="nm-row nm-buttons"><button class="nm-btn" id="omConfirm">确定</button><button class="nm-btn" id="omCancel">取消</button></div>
+      </div>
+    </div>
+
+    <!-- SettingView -->
+    <div id="settingView" class="view hidden" data-view="setting">
+      <div class="view-title"><span class="view-title-txt">设置</span><span class="view-close" data-close="setting">关闭</span></div>
+      <div class="view-content setting-content">
+        <div class="st-row"><span class="nm-label">地图名称</span><input class="nm-input" id="stName" value="未命名"></div>
+        <div class="st-section"><span class="st-section-title">路点设置</span><button class="nm-btn st-reset" id="stReset">重置</button></div>
+        <div class="st-row"><span class="st-row-label">未编辑的路点默认值</span><input class="nm-input st-small" id="stDefaultValue" value="1"></div>
+        <div class="st-table" id="stRoadTable"></div>
+        <div class="nm-row nm-buttons"><button class="nm-btn" id="stApply">应用</button><button class="nm-btn" id="stCancel">取消</button></div>
+      </div>
+    </div>
+
+    <!-- MiniMapView -->
+    <div id="miniMapView" class="view hidden" data-view="miniMap">
+      <div class="view-title"><span class="view-title-txt">地图缩略图</span><span class="view-close" data-close="miniMap">关闭</span></div>
+      <div class="view-content minimap-content">
+        <canvas id="miniMapCanvas" width="540" height="450"></canvas>
+        <div class="minimap-hint">点击小地图区域，可切换地图编辑区</div>
+      </div>
+    </div>
+
+    <!-- TeachView -->
+    <div id="teachView" class="view hidden" data-view="teach">
+      <div class="view-title"><span class="view-title-txt">教程</span><span class="view-close" data-close="teach">关闭</span></div>
+      <div class="view-content teach-content">
+        <video id="teachVideo" controls preload="auto" playsinline src="assets/teach.mp4"></video>
+        <div class="teach-loading" id="teachLoading">Loading.</div>
+      </div>
+    </div>
+
+    <!-- CopyrightView -->
+    <div id="copyrightView" class="view hidden" data-view="copyright">
+      <div class="view-title"><span class="view-title-txt">联系我们</span><span class="view-close" data-close="copyright">关闭</span></div>
+      <div class="view-content copyright-content">
+        <div>策划设计：小唐</div><div>开发人员：小唐</div><div>技术支持：小唐</div>
+        <div>QQ：583051842</div><div>需要帮助请QQ联系</div>
+      </div>
+    </div>
+
+    <!-- SaleView -->
+    <div id="saleView" class="view hidden" data-view="sale">
+      <div class="view-title"><span class="view-title-txt">购买</span><span class="view-close" data-close="sale">关闭</span></div>
+      <div class="view-content sale-content">
+        <div class="sale-title">框架介绍</div>
+        <img class="sale-icon" src="assets/original/eada13e8-be35-4a2c-93cd-80173bd8d42d.jpg" alt="">
+        <div class="sale-body">该前端框架包含以下内容<br>
+1、游戏登录-&gt;加载进大厅-&gt;初始化地图的完成流程，可直接换皮<br>
+2、代码每个接口和关键的地方都有规范的注释<br>
+3、高效的地图寻路算法，每帧支持3000个角色同时寻路<br>
+4、寻路算法支持正方形，菱形，六边形的地图格子寻路<br>
+5、寻路算法支持按玩家体积大小进行寻路，有些地方，体积小的角色可寻路通过，体积大的不一定能寻路通过。<br>
+6、支持RVO导航，可以让角色行走时互相避让<br>
+7、寻路导航组件封装得方便易用，开发者可调用外部实现各种条件的寻路<br>
+8、地图系统有完善的地图跳转功能，可借助地图编辑器编辑传送门，下面工具栏有编辑器入口<br>
+9、有于NPC，怪物的交互功能，可借助地图编辑器摆放NPC和怪物<br>
+10、角色封装有方便易用的导航接口和跟踪接口，可轻易实现一大群怪追踪玩家<br>
+11、系统封装有寻路导航和遥感导航，可以根据需求调用接口切换控制方式<br>
+12、系统封装有类似"英雄联盟"一样的小地图导航系统，可根据需求选择<br>
+13、系统封装有自定义鼠标样式，做页游可能会用到，通过接口可以自由切换样式</div>
+        <div class="sale-q">怎么获取这个框架？<br>框架还不免费，可联系作者购买<br>联系方式&nbsp; QQ：583051842</div>
+        <div class="sale-btn">体验项目</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="alertBox" class="hidden"><div id="alertMsg"></div><button id="alertOk">确定</button></div>
+  <div id="toast" class="hidden"></div>
+  <input type="file" id="globalFileInput" hidden>
+</div>
+
+<script>window.__errs=[];window.addEventListener('error',e=>window.__errs.push(String(e.message)+' @ '+(e.filename||'')+':'+e.lineno));window.addEventListener('unhandledrejection',e=>window.__errs.push('rej: '+String(e.reason)));</script>
+<script src="dist/app.js"></script>
+</body>
+</html>
