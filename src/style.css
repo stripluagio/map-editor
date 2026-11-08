@@ -23,7 +23,7 @@ html, body {
 #bar { position: absolute; left: 0; top: 0; width: 1920px; height: 166px; background: #9b9b9b; }
 .menu-bar {
   position: absolute; left: 0; top: 0; width: 1920px; height: 40px;
-  background: #f6f0f0; display: flex; align-items: center;
+  background: #c7c7c7; display: flex; align-items: center;
   padding-left: 10px; gap: 5px; z-index: 30;
 }
 .menu-item {
@@ -48,20 +48,26 @@ html, body {
 #toolBar1 { top: 42px; }
 #toolBar2 { top: 84px; }
 .tb-btn {
-  height: 40px; background: #c5c5c5; border: none;
+  height: 40px; background: #a7a7a7; border: none;
   font-size: 20px; color: #000; text-align: center; line-height: 40px;
   cursor: pointer; flex: 0 0 auto; white-space: nowrap; overflow: hidden;
   padding: 0 2px;
 }
-.tb-btn:hover { background: #d6d6d6; }
-.tb-btn.active { background: #e8e8e8; border-color: #888; }
+/* 原版 EditToolPanel 的 tabBtns 就是 ToolBar2 上那 6 个按钮，
+ * openWin() 里给选中的那个 setTabBtnColor(i,"#f0f0f0")、其余 "#C5C5C5"。
+ * 实测渲染结果：选中 #cccccc(204)、未选中 #a7a7a7(167) —— 高亮是「变亮」，不是变暗。 */
+.tb-btn:hover { background: #b5b5b5; }
+.tb-btn.active { background: #cccccc; }
 .tb-spacer { flex: 1 1 auto; }
 
 .info-bar {
   position: absolute; left: 0; top: 126px; width: 1920px; height: 40px;
   background: #c7c7c7; display: flex; align-items: center;
 }
-.info-text { width: 356px; height: 40px; display: flex; align-items: center; justify-content: center; gap: 24px; }
+/* 三段各占 356px（原版 InfoText_* 节点宽），文字左起 28px，标题墨迹与数值墨迹相隔 29px。
+ * 这三个数都是从原版 1920×1080 截图逐列量出来的（原先居中，整体右移 35px、间隔也偏大）。
+ * `gap` 写 9 是因为标题 span 的盒子比墨迹宽约 20px（末字右侧留白），9 + 20 ≈ 29。 */
+.info-text { width: 356px; height: 40px; display: flex; align-items: center; justify-content: flex-start; gap: 9px; padding-left: 28px; box-sizing: border-box; }
 .info-title { font-size: 28px; color: #353434; }
 .info-content { font-size: 28px; color: #353434; }
 

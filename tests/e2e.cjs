@@ -61,6 +61,14 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('toolbar2 first label', (await E("document.querySelector('#toolBar2 .tb-btn').textContent"))==='隐藏地图（U）');
   ok('left panel title', (await E("document.getElementById('toolTitle').textContent"))==='编辑路点');
   ok('5 road swatches', (await E("document.querySelectorAll('#toolContent .tool-item').length"))===5);
+  // 顶部三条的底色是从原版 1920×1080 截图里量出来的：条底 #c7c7c7、按钮 #a7a7a7。
+  // 之前菜单条写成 #f6f0f0、按钮写成 #c5c5c5，按钮几乎和底条同色，"糊"成一片。
+  eq('menu bar bg = original #c7c7c7',
+     await E("getComputedStyle(document.getElementById('menuBar')).backgroundColor"), 'rgb(199, 199, 199)');
+  eq('toolbar bg = original #c7c7c7',
+     await E("getComputedStyle(document.getElementById('toolBar1')).backgroundColor"), 'rgb(199, 199, 199)');
+  eq('toolbar button bg = original #a7a7a7',
+     await E("getComputedStyle(document.querySelector('#toolBar1 .tb-btn')).backgroundColor"), 'rgb(167, 167, 167)');
 
   console.log('== menus ==');
   await click(36,24);
@@ -269,6 +277,12 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('showPath is off by default', (await E('WMApp.test.showPath'))===false);
   ok('follow button label default', (await E("document.querySelector('#testToolBar .tb-btn[data-act=t_followPlayer]').textContent"))==='屏幕跟随玩家(F3)');
   ok('path button label default', (await E("document.querySelector('#testToolBar .tb-btn[data-act=t_showPath]').textContent"))==='查看寻路过程(F4)');
+  // 原版 `TestView/ToolBar` 场景里有 7 个按钮，但 `Button5`（显示小地图(F2)）
+  // 的 `active` 就是 false，实测截图也只显示 6 个 —— 克隆照抄「可见的 6 个」。
+  eq('test toolbar has 6 visible buttons like the original',
+     await E("document.querySelectorAll('#testToolBar .tb-btn').length"), 6);
+  eq('no 显示小地图 button (original Button5 is active:false)',
+     await E("document.querySelectorAll('#testToolBar .tb-btn[data-act=t_showMiniMap]').length"), 0);
 
   // paint a wide walkable area so there is somewhere to walk
   await E("(function(){var r=WMApp.road,c=r[0].length,p=WMApp.painted,m=Math.floor(r.length/2);for(var y=m-3;y<=m+3;y++)for(var x=3;x<c-3;x++){r[y][x]=0;p.add(y*c+x);}return 1})()");

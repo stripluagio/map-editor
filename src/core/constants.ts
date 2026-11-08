@@ -170,7 +170,11 @@ export const TOOLBAR2 = [
   { label: '放置出生点', w: 130, act: 'openSpawnWin' },
 ] as const;
 
-/** TestView toolbar. */
+/**
+ * TestView toolbar —— 原版 `TestView/ToolBar` 有 7 个按钮，但 `Button5`
+ * （`显示小地图(F2)`）在场景里就是 `active = false`，实测截图也只显示 6 个。
+ * 所以这里只放 6 个，和原版实际可见的一致。
+ */
 export const TEST_TOOLBAR = [
   { label: '隐藏地图(U)', w: 180, act: 't_showMapLayer' },
   { label: '隐藏路点(I)', w: 180, act: 't_showRoadLayer' },
