@@ -940,16 +940,17 @@
     const horizontal = [];
     const vertical = [];
     for (let n = 0; n <= 2 * rows + 1; n++) {
-      const even = n % 2 === 0;
-      if (!even && !showAux) continue;
-      horizontal.push({ pos: n * halfH, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+      horizontal.push(angle90Line(n * halfH, n % 2 === 0, showAux));
     }
     for (let r = 0; r <= 2 * cols + 1; r++) {
-      const even = r % 2 === 0;
-      if (!even && !showAux) continue;
-      vertical.push({ pos: r * halfW, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+      vertical.push(angle90Line(r * halfW, r % 2 === 0, showAux));
     }
     return { horizontal, vertical, diagonals: [] };
+  }
+  function angle90Line(pos, even, showAux) {
+    if (even) return { pos, color: GRID_BORDER, width: 2 };
+    if (!showAux) return { pos, color: GRID_BORDER, width: 2 };
+    return { pos, color: AUX_FAINT, width: 1 };
   }
   function angle45Lines(mapWidth, mapHeight, nw, nh, showAux) {
     const halfW = nw / 2, halfH = nh / 2;

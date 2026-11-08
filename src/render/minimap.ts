@@ -1,6 +1,6 @@
 import { roadRenderColor } from '../core/color';
 import { state } from '../app/state';
-import { context2d } from './context';
+import { context2d, sizeCanvas } from './context';
 
 const canvas = () => document.getElementById('miniMapCanvas') as HTMLCanvasElement;
 
@@ -15,6 +15,10 @@ const canvas = () => document.getElementById('miniMapCanvas') as HTMLCanvasEleme
 export function drawMiniMap(): void {
   const cv = canvas();
   if (!cv) return;
+  // 540×450 是布局尺寸（CSS 里也是这个数）；位图按 fitScale × dpr 放大，
+  // 否则 #app 的 CSS transform 会把整块画布再缩一次。
+  const lw = 540, lh = 450;
+  sizeCanvas(cv, lw, lh);
   const { ctx, W, H } = context2d(cv);
   ctx.fillStyle = '#333'; ctx.fillRect(0, 0, W, H);
   const p = state.params;

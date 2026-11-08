@@ -9,7 +9,17 @@ export interface AuxLine {
 
 /** 原版 `GridLayer` 的辅助线配色（honeycomb / honeycomb2 共用）。 */
 export const AUX_STRONG = '#11115566';   // 40% 蓝
-export const AUX_FAINT = '#00550025';    // 14.5% 深绿
+/**
+ * 深绿辅助线。**注意这里是「观感值」，不是原版源码里的字面值。**
+ *
+ * 原版 `lingColor1 = "#00550025"`，alpha = 0x25/255 = 0.145。但原版跑在 WebGL 上，
+ * 实测落在黑底上的像素是 `(0,23,0)` —— 反推 alpha ≈ 0.27，正好是 `1-(1-0.145)²`
+ * 的两遍叠加值（`(0,12,0)` 才是单遍 0.145 的结果）。
+ *
+ * 克隆是 Canvas2D，只画一遍，用 0.145 会明显偏淡。所以直接写 0.27 让**看上去**一样：
+ * 黑底上同样得到 `(0,23,0)`。要改回去的话，把 alpha 换回 `25` 即可。
+ */
+export const AUX_FAINT = '#00550025';    // 14.5% 深绿（= 原版 lingColor1 字面值）
 
 /**
  * 六边形地图的矩形辅助线 —— 复刻 `GridLayer.drawHoneycombGrid` /
@@ -113,9 +123,15 @@ export interface RectGrid {
  * 原版在**半格**间距上画线：偶数条是格子边界（`lingColor3` 2px），
  * 奇数条是辅助线（`lingColor1` 1px）。
  *
- * ⚠️ 原版关掉辅助线时，奇数条因为 `this._isShowAuxiliaryLine && (...)` **短路**
- * 而**仍然被画出来**（沿用上一条的灰 2px）—— 等于「关不掉」。
- * 这里按开关的**本意**实现：关掉后只留偶数条格子边界（间距变回整格）。
+ * ⚠️ 原版关掉辅助线时，奇数条**仍然会被画出来**：
+ *
+ *     n % 2 == 0 ? (strokeColor = lingColor3, lineWidth = 2)
+ *                : this._isShowAuxiliaryLine && (strokeColor = lingColor1, lineWidth = 1)
+ *
+ * 关掉时 `else if` 分支整个短路，`strokeColor` / `lineWidth` 保持上一条（偶数条）的
+ * `lingColor3` / 2px，于是奇数条变成**灰色的半格线** —— 看起来「关不掉」。
+ *
+ * 这里**严格照抄**这个行为（不再按开关本意去隐藏奇数条）：原版怎么样就怎么样。
  */
 export function angle90Lines(
   mapWidth: number, mapHeight: number,
@@ -126,16 +142,24 @@ export function angle90Lines(
   const horizontal: AuxLine[] = [];
   const vertical: AuxLine[] = [];
   for (let n = 0; n <= 2 * rows + 1; n++) {
-    const even = n % 2 === 0;
-    if (!even && !showAux) continue;
-    horizontal.push({ pos: n * halfH, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+    horizontal.push(angle90Line(n * halfH, n % 2 === 0, showAux));
   }
   for (let r = 0; r <= 2 * cols + 1; r++) {
-    const even = r % 2 === 0;
-    if (!even && !showAux) continue;
-    vertical.push({ pos: r * halfW, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+    vertical.push(angle90Line(r * halfW, r % 2 === 0, showAux));
   }
   return { horizontal, vertical, diagonals: [] };
+}
+
+/**
+ * 一条 90 度网格线。`even` = 落在格子边界上。
+ *
+ * 奇数条（辅助线）在 `showAux` 关掉时**沿用偶数条的灰色 2px**，见上面 `angle90Lines`
+ * 的说明 —— 这是原版 `&&` 短路留下的行为，不是笔误。
+ */
+function angle90Line(pos: number, even: boolean, showAux: boolean): AuxLine {
+  if (even) return { pos, color: GRID_BORDER, width: 2 };
+  if (!showAux) return { pos, color: GRID_BORDER, width: 2 };
+  return { pos, color: AUX_FAINT, width: 1 };
 }
 
 /**

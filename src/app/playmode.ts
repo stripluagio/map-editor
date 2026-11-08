@@ -7,6 +7,7 @@ import type { SeekState, TestState } from './state';
 import { getMapData } from './io';
 import { render } from '../render/canvas';
 import { renderTest, renderTestSize } from '../render/playmode';
+import { logicalSize } from '../render/context';
 import { toast } from '../ui/overlay';
 import { $ } from '../ui/dom';
 
@@ -274,7 +275,11 @@ export function bindTest(): void {
     const r = cv.getBoundingClientRect(), s = state.screenScale || 1;
     let x = (e.clientX - r.left) / s, y = (e.clientY - r.top) / s;
     const T = state.test;
-    if (T && T.follow) { x += T.player.x - cv.width / 2; y += T.player.y - cv.height / 2; }
+    // `cv.width` is the device-pixel bitmap now, so use the logical size.
+    if (T && T.follow) {
+      const L = logicalSize(cv);
+      x += T.player.x - L.w / 2; y += T.player.y - L.h / 2;
+    }
     return { x, y };
   };
 

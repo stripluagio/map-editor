@@ -4,7 +4,7 @@ import { hexToRgba, roadRenderColor, entityColor } from '../core/color';
 import { TYPE_LABEL, ENTITY_SKINS, entityRing } from '../core/constants';
 import { state } from '../app/state';
 import { getSceneLayer } from './cache';
-import { context2d, inView } from './context';
+import { context2d, inView, sizeCanvas } from './context';
 import { cellPath, hexPath } from './shapes';
 import { drawMiniMap } from './minimap';
 
@@ -50,8 +50,8 @@ function entityLabel(e: MapItem): string {
 export function resizeCanvas(): void {
   const stage = el('editAreaView');
   const cv = canvas();
-  cv.width = stage.clientWidth; cv.height = stage.clientHeight;
-  cv.style.width = stage.clientWidth + 'px'; cv.style.height = stage.clientHeight + 'px';
+  // Bitmap = layout × fitScale × dpr so the browser never has to resample it.
+  sizeCanvas(cv, stage.clientWidth, stage.clientHeight);
   render();
 }
 
@@ -70,7 +70,8 @@ export function render(): void {
   ctx.scale(z, z);
   // Single blit: background + road + grid are composited off-screen.
   const scene = getSceneLayer();
-  if (scene && scene.width) ctx.drawImage(scene, 0, 0);
+  // 场景层是设备分辨率的位图，必须按地图尺寸（app 单位）贴回去，否则会被放大 k 倍。
+  if (scene && scene.width) ctx.drawImage(scene, 0, 0, p.mapWidth, p.mapHeight);
   if (state.layers.entity) drawEntities(ctx);
   if (state.pathPreview && state.pathPreview.length) drawPathPreview(ctx);
   if (state.cursorNode && state.mode === 'edit') drawBrushFocus(ctx);

@@ -7,6 +7,7 @@ import { $, el, inputValue, setInputValue } from './dom';
 import { closeView } from './views';
 import { alertBox } from './overlay';
 import { hexPath } from '../render/shapes';
+import { context2d, sizeCanvas } from '../render/context';
 
 export type InitDocument = (params: MapParamsModel, data: Partial<MapData> | null) => void;
 
@@ -44,9 +45,10 @@ export function checkToggle(type: MapType): void {
 
 export function drawGridPreview(): void {
   const cv = $('nmGridPreview') as HTMLCanvasElement;
-  const ctx = cv.getContext('2d');
-  if (!ctx) return;
-  const W = cv.width, H = cv.height, t = state.nmMapType;
+  // 预览画布同样是 #app 里的元素，位图要按 fitScale × dpr 放大才不会发虚。
+  sizeCanvas(cv, 280, 280);
+  const { ctx, W, H } = context2d(cv);
+  const t = state.nmMapType;
   ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = '#bbb'; ctx.lineWidth = 1;
   const nw = t === MapType.angle45 ? 28 : t === MapType.angle90 ? 28 : 28;

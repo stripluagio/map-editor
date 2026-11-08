@@ -654,9 +654,15 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('90 度：格子边界在 y=0/30/60',
      r90.on[0] === 'border' && r90.on[30] === 'border' && r90.on[60] === 'border', r90.on);
   ok('90 度：辅助线落在半格 y=15/45', r90.on[15] === 'aux' && r90.on[45] === 'aux', r90.on);
-  ok('90 度：关掉后 y=15/45 消失', r90.off[15] === 'none' && r90.off[45] === 'none', r90.off);
+  // 原版关掉辅助线时奇数条被 `&&` 短路，沿用偶数条的 lingColor3 / 2px，
+  // 所以半格线**还在**，只是从绿变灰 —— 这就是原版「看着关不掉」的样子。
+  ok('90 度：关掉后 y=15/45 变成灰色半格线（原版短路行为）',
+     r90.off[15] === 'border' && r90.off[45] === 'border', r90.off);
   ok('90 度：关掉后格子边界还在',
      r90.off[0] === 'border' && r90.off[30] === 'border' && r90.off[60] === 'border', r90.off);
+  ok('90 度：开关唯一区别是半格线的绿/灰',
+     r90.on[15] === 'aux' && r90.off[15] === 'border' &&
+     r90.on[30] === r90.off[30] && r90.on[0] === r90.off[0], { on: r90.on, off: r90.off });
 
   console.log('== 45 度网格（原版 draw45AngleGrid：矩形辅助线 + 斜线）==');
   const r45 = JSON.parse(await E(`(function(){
@@ -751,6 +757,61 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('这一格现在画得上（曾经静默跳过）', bandCell.grew === 1, bandCell);
   ok('并且进了导出数组', JSON.stringify(bandCell.hits) === JSON.stringify([[bandCell.dx, 87, 0]]), bandCell.hits);
   eq('导出仍是 168 行', bandCell.rows, 168);
+
+  // == 画布位图 1:1 对应显示尺寸（不再被 #app 的 CSS transform 二次重采样）==
+  // fitStage() 给 #app 上 transform: scale(innerWidth/1920)。位图如果只按「布局尺寸」
+  // 建，浏览器每帧都要把整块画布再缩一次（实测 1464×884 显示成 1451.8×876.6，
+  // 线条和文字发虚）。现在位图 = 布局 × fitScale × dpr，绘制坐标不变。
+  await send('Emulation.setDeviceMetricsOverride',
+             { width: 1600, height: 900, deviceScaleFactor: 1, mobile: false });
+  await sleep(700);
+  const rs = JSON.parse(await ev(`(function(){
+    var cv = document.getElementById('mapCanvas');
+    var r = cv.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    return JSON.stringify({
+      s: WMApp.screenScale, dpr: dpr,
+      bw: cv.width, bh: cv.height,
+      dw: Math.round(r.width), dh: Math.round(r.height),
+      lw: parseFloat(cv.style.width), lh: parseFloat(cv.style.height),
+      k: +(cv.width / parseFloat(cv.style.width)).toFixed(4)
+    });
+  })()`));
+  ok('窄窗口下 screenScale = 1600/1920', Math.abs(rs.s - 1600 / 1920) < 1e-6, rs);
+  ok('位图宽度 = 显示宽度 × dpr（修复前差 1/s）',
+     Math.abs(rs.bw - rs.dw * rs.dpr) <= 1, rs);
+  ok('位图高度 = 显示高度 × dpr', Math.abs(rs.bh - rs.dh * rs.dpr) <= 1, rs);
+  ok('后备缓冲缩放系数 = fitScale × dpr',
+     Math.abs(rs.k - rs.s * rs.dpr) < 0.002, rs);
+  ok('CSS 尺寸仍是布局单位（绘制坐标系没变）',
+     Math.abs(rs.lw * rs.s - rs.dw) <= 1 && Math.abs(rs.lh * rs.s - rs.dh) <= 1, rs);
+
+  const align = JSON.parse(await ev(`(function(){
+    WMNewMap({ name:'rs', mapType:1, mapWidth:1920, mapHeight:1440, ceilWidth:60, ceilHeight:30 });
+    WMApp.layers.map = false; WMApp.layers.road = false; WMApp.layers.grid = true;
+    WMApp.showAuxLine = false;
+    WMApp.view.offsetX = 0; WMApp.view.offsetY = 0; WMApp.view.zoom = 1;
+    WMApp.roadVersion++; WMRender();
+    var cv = document.getElementById('mapCanvas');
+    var k = cv.width / parseFloat(cv.style.width);
+    var d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    // 90 度地图 ceilWidth=60 -> 竖线在 x=0/30/60…；取 y 在格子内部（避开横线）
+    var y = Math.round(7 * k);
+    var col = Math.round(30 * k), best = -1, bestX = -1;
+    for (var x = col - 3; x <= col + 3; x++) {
+      var i = (y * cv.width + x) * 4;
+      var lum = d[i] + d[i + 1] + d[i + 2];
+      if (lum > best) { best = lum; bestX = x; }
+    }
+    return JSON.stringify({ k: +k.toFixed(4), col: col, bestX: bestX, lum: best });
+  })()`));
+  ok('缩放后竖线仍落在 x=30 的设备像素上（误差 ≤1px）',
+     Math.abs(align.bestX - align.col) <= 1, align);
+  ok('该竖线确实被画出来（亮度明显高于底色）', align.lum > 200, align);
+
+  await send('Emulation.setDeviceMetricsOverride',
+             { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
+  await sleep(500);
 
   ws.close(); ch.kill();
   console.log('\nRESULT: '+pass+' passed, '+fail+' failed');

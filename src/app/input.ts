@@ -5,6 +5,7 @@ import { paintAt, placeEntity, entityAt, selectEntity, moveBrush, commitBrush } 
 import { closeMenu } from '../ui/menus';
 import { buildPropertyPanel } from '../ui/property';
 import { drawMiniMap } from '../render/minimap';
+import { logicalSize } from '../render/context';
 import { $ } from '../ui/dom';
 
 const canvas = () => document.getElementById('mapCanvas') as HTMLCanvasElement;
@@ -35,10 +36,11 @@ function updateInfoBar(n: ReturnType<typeof nodeAt>): void {
 
 export function clampView(): void {
   const cv = canvas(), z = state.view.zoom;
+  const L = logicalSize(cv);
   const pw = state.params ? state.params.mapWidth * z : 1920;
   const ph = state.params ? state.params.mapHeight * z : 1080;
-  state.view.offsetX = Math.min(0, Math.max(cv.width - pw, state.view.offsetX));
-  state.view.offsetY = Math.min(0, Math.max(cv.height - ph, state.view.offsetY));
+  state.view.offsetX = Math.min(0, Math.max(L.w - pw, state.view.offsetX));
+  state.view.offsetY = Math.min(0, Math.max(L.h - ph, state.view.offsetY));
 }
 
 function bindScrollDrag(thumb: HTMLElement, axis: 'x' | 'y'): void {
@@ -105,6 +107,7 @@ export function bindMapInput(): void {
     if (state.mode !== 'edit') return;
     const r = cv.getBoundingClientRect(), s = state.screenScale || 1;
     const lx = (e.clientX - r.left) / s, ly = (e.clientY - r.top) / s;
+    const L = logicalSize(cv), LW = L.w, LH = L.h;
     if (state.panning) {
       state.view.offsetX += (e.clientX - state.lastMouse.x) / s;
       state.view.offsetY += (e.clientY - state.lastMouse.y) / s;
@@ -128,7 +131,7 @@ export function bindMapInput(): void {
       updateInfoBar(nb);
       return;
     }
-    if (lx < 0 || ly < 0 || lx > cv.width || ly > cv.height) {
+    if (lx < 0 || ly < 0 || lx > LW || ly > LH) {
       state.cursorNode = null; render(); return;
     }
     const wp = { x: (lx - state.view.offsetX) / state.view.zoom,
@@ -185,8 +188,9 @@ export function bindMapInput(): void {
     const m = state.minimapRect;
     if (!m) return;
     const wx = (x - m.dx) / m.s, wy = (y - m.dy) / m.s;
-    state.view.offsetX = cv.width / 2 - wx * state.view.zoom;
-    state.view.offsetY = cv.height / 2 - wy * state.view.zoom;
+    const L = logicalSize(cv);
+    state.view.offsetX = L.w / 2 - wx * state.view.zoom;
+    state.view.offsetY = L.h / 2 - wy * state.view.zoom;
     clampView(); render(); drawMiniMap();
   });
 

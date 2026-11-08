@@ -26,6 +26,12 @@ export function bindKeyboard(action: ActionHandler): void {
     if (e.ctrlKey && e.key.toLowerCase() === 'v') { e.preventDefault(); if (!typing) pasteEntity(); return; }
     if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); if (state.mode === 'edit') { state.undo.undo(); render(); } return; }
     if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); if (state.mode === 'edit') { state.undo.redo(); render(); } return; }
+    // 编辑 → 转换路点风格（CTRL + B）
+    if (e.ctrlKey && e.key.toLowerCase() === 'b') { e.preventDefault(); if (state.mode === 'edit') action('switchRoadStyle'); return; }
+    // NOTE: 命令菜单里还写着 `地图切片导出（ctrl + W）` / `地图缩小导出（ctrl + T）`，
+    // 但这两个是浏览器保留键（关标签页 / 开新标签页），页面里的 `preventDefault()`
+    // 对它们无效 —— 硬绑只会让用户误关标签页。所以这里不绑，菜单项才是可靠入口。
+    // 原版同样没绑（这两个条目只存在于 `Menubar.data` 那份静态模板里，从来没有 `fun`）。
     if (e.key === 'Escape') {
       if (state.activeView) closeView();
       else if (state.mode === 'test') closeTest();

@@ -185,15 +185,19 @@ eq('hc2 v[2] pos = halfW', +A2.vertical[2].pos.toFixed(2), 20);
 eq('hc2 v[3] pos = halfW+halfH', +A2.vertical[3].pos.toFixed(2), 37.32);
 eq('hc2 v[4] pos = next period', A2.vertical[4].pos, 40);
 eq('hc2 only the period start is the 40% blue', A2.vertical[0].color, '#11115566');
-eq('hc2 v[1] is the faint green', A2.vertical[1].color, '#00550025');
-eq('hc2 v[2] is the faint green', A2.vertical[2].color, '#00550025');
-eq('hc2 v[3] is the faint green', A2.vertical[3].color, '#00550025');
+eq('hc2 v[1] is the faint green', A2.vertical[1].color, C.AUX_FAINT);
+eq('hc2 v[2] is the faint green', A2.vertical[2].color, C.AUX_FAINT);
+eq('hc2 v[3] is the faint green', A2.vertical[3].color, C.AUX_FAINT);
 eq('hc2 v widths 1/1.2/1.2/1.2 (only the period start is 1px)',
    A2.vertical.slice(0, 4).map(l => l.width).join(','), '1,1.2,1.2,1.2');
 eq('hc2 h step = ceilWidth/4', A2.horizontal[2].pos - A2.horizontal[1].pos, 10);
 eq('hc2 h strong every 4th', A2.horizontal[4].color, '#11115566');
-eq('hc2 h faint otherwise', A2.horizontal[5].color, '#00550025');
+eq('hc2 h faint otherwise', A2.horizontal[5].color, C.AUX_FAINT);
 eq('hc2 h width is 1', A2.horizontal[5].width, 1);
+// 原版 lingColor1 = #00550025（alpha 0.145）。实测原版落在黑底上 96% 的绿线是 (0,12,0)
+// —— 12/85 = 0.141，就是单遍 0.145；(0,23,0) 只出现在两族线重合的位置（4%）。
+// 所以克隆保持 0.145，靠「按设备像素对齐」把线画实，而不是把 alpha 调亮。
+eq('AUX_FAINT is the original 14.5% green', C.AUX_FAINT, '#00550025');
 ok('hc2 is not a plain 20px lattice',
    A2.vertical.some(l => Math.abs(l.pos - 2.68) < 0.01) && A2.vertical.some(l => l.pos === 20));
 
@@ -236,24 +240,27 @@ eq('90: first line at y=0', N90.horizontal[0].pos, 0);
 eq('90: step is half a cell (15)', N90.horizontal[1].pos - N90.horizontal[0].pos, 15);
 eq('90: even lines are cell borders', N90.horizontal[0].color, '#bbbbbbaa');
 eq('90: even lines are 2px', N90.horizontal[0].width, 2);
-eq('90: odd lines are the faint aux', N90.horizontal[1].color, '#00550025');
+eq('90: odd lines are the faint aux', N90.horizontal[1].color, C.AUX_FAINT);
 eq('90: odd lines are 1px', N90.horizontal[1].width, 1);
 eq('90: no diagonals', N90.diagonals.length, 0);
 
 const N90off = C.angle90Lines(1920, 1440, 60, 30, false);
-eq('90 aux off: only cell borders', N90off.horizontal.length, 49);
-eq('90 aux off: pitch is a full cell (30)', N90off.horizontal[1].pos - N90off.horizontal[0].pos, 30);
+// 原版关掉辅助线时，奇数条因为 `&&` 短路沿用了上一条（偶数条）的 lingColor3 / 2px，
+// 所以仍然是**半格**的灰色 2px 线 —— 看着「关不掉」。克隆严格照抄这个行为。
+eq('90 aux off: still half-cell pitch (original short-circuit)',
+   N90off.horizontal.length, 98);
+eq('90 aux off: pitch is still 15', N90off.horizontal[1].pos - N90off.horizontal[0].pos, 15);
 ok('90 aux off: every line is a 2px border',
    N90off.horizontal.every(l => l.color === '#bbbbbbaa' && l.width === 2) &&
    N90off.vertical.every(l => l.color === '#bbbbbbaa' && l.width === 2));
-eq('90 aux off: vertical count', N90off.vertical.length, 33);
+eq('90 aux off: vertical count matches ON', N90off.vertical.length, 66);
 
 console.log('== 45 度网格（原版 draw45AngleGrid：矩形辅助线 + 斜线）==');
 const N45 = C.angle45Lines(1920, 1440, 60, 30, true);
 eq('45: horizontal count = t+1', N45.horizontal.length, 98);        // t = 2*48+1
 eq('45: vertical count = e+1', N45.vertical.length, 66);             // e = 2*32+1
 eq('45: even aux is the 40% blue', N45.horizontal[0].color, '#11115566');
-eq('45: odd aux is the faint green', N45.horizontal[1].color, '#00550025');
+eq('45: odd aux is the faint green', N45.horizontal[1].color, C.AUX_FAINT);
 eq('45: aux is 1px', N45.horizontal[0].width, 1);
 eq('45: diagonal count = e+t-1', N45.diagonals.length, 161);
 eq('45: first diagonal (a=1) starts on the top edge',

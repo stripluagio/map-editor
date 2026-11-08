@@ -858,16 +858,17 @@
     const horizontal = [];
     const vertical = [];
     for (let n = 0; n <= 2 * rows + 1; n++) {
-      const even = n % 2 === 0;
-      if (!even && !showAux) continue;
-      horizontal.push({ pos: n * halfH, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+      horizontal.push(angle90Line(n * halfH, n % 2 === 0, showAux));
     }
     for (let r = 0; r <= 2 * cols + 1; r++) {
-      const even = r % 2 === 0;
-      if (!even && !showAux) continue;
-      vertical.push({ pos: r * halfW, color: even ? GRID_BORDER : AUX_FAINT, width: even ? 2 : 1 });
+      vertical.push(angle90Line(r * halfW, r % 2 === 0, showAux));
     }
     return { horizontal, vertical, diagonals: [] };
+  }
+  function angle90Line(pos, even, showAux) {
+    if (even) return { pos, color: GRID_BORDER, width: 2 };
+    if (!showAux) return { pos, color: GRID_BORDER, width: 2 };
+    return { pos, color: AUX_FAINT, width: 1 };
   }
   function angle45Lines(mapWidth, mapHeight, nw, nh, showAux) {
     const halfW = nw / 2, halfH = nh / 2;
@@ -1046,9 +1047,47 @@
     }
   }
 
+  // src/render/context.ts
+  var logical = /* @__PURE__ */ new WeakMap();
+  function logicalSize(cv) {
+    return logical.get(cv) || { w: cv.width, h: cv.height };
+  }
+  function sizeCanvas(cv, lw, lh) {
+    const s = state.screenScale || 1;
+    const dpr = window.devicePixelRatio || 1;
+    const bw = Math.max(1, Math.round(lw * s * dpr));
+    const bh = Math.max(1, Math.round(lh * s * dpr));
+    if (cv.width !== bw) cv.width = bw;
+    if (cv.height !== bh) cv.height = bh;
+    cv.style.width = lw + "px";
+    cv.style.height = lh + "px";
+    logical.set(cv, { w: lw, h: lh });
+    return cv.width / Math.max(1, lw);
+  }
+  function context2d(cv) {
+    const ctx = cv.getContext("2d");
+    if (!ctx) throw new Error("2D canvas context unavailable");
+    const L = logicalSize(cv);
+    ctx.setTransform(
+      cv.width / Math.max(1, L.w),
+      0,
+      0,
+      cv.height / Math.max(1, L.h),
+      0,
+      0
+    );
+    return { ctx, W: L.w, H: L.h };
+  }
+
   // src/render/cache.ts
   var sceneCanvas = document.createElement("canvas");
   var sceneSignature = "";
+  function sceneDeviceScale() {
+    const cv = document.getElementById("mapCanvas");
+    if (!cv || !cv.width) return 1;
+    const L = logicalSize(cv);
+    return cv.width / Math.max(1, L.w);
+  }
   function sceneSig() {
     const p = state.params;
     if (!p) return "";
@@ -1071,14 +1110,16 @@
   function getSceneLayer() {
     const p = state.params;
     if (!p) return null;
-    const sig = sceneSig();
+    const k = sceneDeviceScale();
+    const sig = sceneSig() + "|" + k.toFixed(4);
     if (sig === sceneSignature && sceneCanvas.width) return sceneCanvas;
-    if (sceneCanvas.width !== p.mapWidth || sceneCanvas.height !== p.mapHeight) {
-      sceneCanvas.width = p.mapWidth;
-      sceneCanvas.height = p.mapHeight;
-    }
+    const bw = Math.max(1, Math.round(p.mapWidth * k));
+    const bh = Math.max(1, Math.round(p.mapHeight * k));
+    if (sceneCanvas.width !== bw) sceneCanvas.width = bw;
+    if (sceneCanvas.height !== bh) sceneCanvas.height = bh;
     const ctx = sceneCanvas.getContext("2d");
     if (!ctx) return null;
+    ctx.setTransform(bw / p.mapWidth, 0, 0, bh / p.mapHeight, 0, 0);
     ctx.clearRect(0, 0, p.mapWidth, p.mapHeight);
     if (state.layers.map && p.bgImage && p.bgImage.complete) {
       try {
@@ -1087,7 +1128,7 @@
       }
     }
     if (state.layers.road) drawRoadInto(ctx);
-    if (state.layers.grid) drawGridInto(ctx);
+    if (state.layers.grid) drawGridInto(ctx, bw / p.mapWidth);
     sceneSignature = sig;
     return sceneCanvas;
   }
@@ -1095,21 +1136,21 @@
     sceneSignature = "\0";
   }
   var invalidateAll = invalidateScene;
-  function drawGridInto(ctx) {
+  function drawGridInto(ctx, k) {
     const g = state.geom, t = g.mapType;
     const nw = g.nodeWidth, nh = g.nodeHeight;
     const pw = state.params.mapWidth, ph = state.params.mapHeight;
     const rows = state.road.length, cols = state.road[0]?.length ?? 0;
     if (t === 1 /* angle90 */) {
       const r = angle90Lines(pw, ph, nw, nh, state.showAuxLine);
-      drawAuxLines(ctx, r.horizontal, false, pw);
-      drawAuxLines(ctx, r.vertical, true, ph);
+      drawAuxLines(ctx, r.horizontal, false, pw, k);
+      drawAuxLines(ctx, r.vertical, true, ph, k);
       return;
     }
     if (t === 0 /* angle45 */) {
       const r = angle45Lines(pw, ph, nw, nh, state.showAuxLine);
-      drawAuxLines(ctx, r.horizontal, false, pw);
-      drawAuxLines(ctx, r.vertical, true, ph);
+      drawAuxLines(ctx, r.horizontal, false, pw, k);
+      drawAuxLines(ctx, r.vertical, true, ph, k);
       ctx.strokeStyle = hexToRgba(GRID_BORDER);
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -1122,8 +1163,8 @@
     }
     if (state.showAuxLine) {
       const aux = honeycombAuxLines(nw, nh, pw, ph, t);
-      drawAuxLines(ctx, aux.vertical, true, ph);
-      drawAuxLines(ctx, aux.horizontal, false, pw);
+      drawAuxLines(ctx, aux.vertical, true, ph, k);
+      drawAuxLines(ctx, aux.horizontal, false, pw, k);
     }
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = hexToRgba("#bbbbbbaa");
@@ -1136,7 +1177,7 @@
     }
     ctx.stroke();
   }
-  function drawAuxLines(ctx, lines, vertical, span) {
+  function drawAuxLines(ctx, lines, vertical, span, k) {
     const buckets = /* @__PURE__ */ new Map();
     for (const l of lines) {
       const key = l.color + "|" + l.width;
@@ -1149,11 +1190,12 @@
     }
     for (const b of buckets.values()) {
       ctx.strokeStyle = hexToRgba(b.color);
-      ctx.lineWidth = b.width;
-      const snap = b.width === 1 ? 0.5 : 0;
+      const dw = Math.max(1, Math.round(b.width * k));
+      ctx.lineWidth = dw / k;
+      const snap = (v) => (Math.floor(v * k) + dw / 2) / k;
       ctx.beginPath();
       for (const p of b.pos) {
-        const q = p + snap;
+        const q = snap(p);
         if (vertical) {
           ctx.moveTo(q, 0);
           ctx.lineTo(q, span);
@@ -1195,18 +1237,13 @@
     }
   }
 
-  // src/render/context.ts
-  function context2d(cv) {
-    const ctx = cv.getContext("2d");
-    if (!ctx) throw new Error("2D canvas context unavailable");
-    return { ctx, W: cv.width, H: cv.height };
-  }
-
   // src/render/minimap.ts
   var canvas = () => document.getElementById("miniMapCanvas");
   function drawMiniMap() {
     const cv = canvas();
     if (!cv) return;
+    const lw = 540, lh = 450;
+    sizeCanvas(cv, lw, lh);
     const { ctx, W, H } = context2d(cv);
     ctx.fillStyle = "#333";
     ctx.fillRect(0, 0, W, H);
@@ -1282,10 +1319,7 @@
   function resizeCanvas() {
     const stage = el("editAreaView");
     const cv = canvas2();
-    cv.width = stage.clientWidth;
-    cv.height = stage.clientHeight;
-    cv.style.width = stage.clientWidth + "px";
-    cv.style.height = stage.clientHeight + "px";
+    sizeCanvas(cv, stage.clientWidth, stage.clientHeight);
     render();
   }
   function render() {
@@ -1302,7 +1336,7 @@
     ctx.translate(state.view.offsetX, state.view.offsetY);
     ctx.scale(z, z);
     const scene = getSceneLayer();
-    if (scene && scene.width) ctx.drawImage(scene, 0, 0);
+    if (scene && scene.width) ctx.drawImage(scene, 0, 0, p.mapWidth, p.mapHeight);
     if (state.layers.entity) drawEntities(ctx);
     if (state.pathPreview && state.pathPreview.length) drawPathPreview(ctx);
     if (state.cursorNode && state.mode === "edit") drawBrushFocus(ctx);
@@ -1750,10 +1784,11 @@
   }
   function clampView() {
     const cv = canvas3(), z = state.view.zoom;
+    const L = logicalSize(cv);
     const pw = state.params ? state.params.mapWidth * z : 1920;
     const ph = state.params ? state.params.mapHeight * z : 1080;
-    state.view.offsetX = Math.min(0, Math.max(cv.width - pw, state.view.offsetX));
-    state.view.offsetY = Math.min(0, Math.max(cv.height - ph, state.view.offsetY));
+    state.view.offsetX = Math.min(0, Math.max(L.w - pw, state.view.offsetX));
+    state.view.offsetY = Math.min(0, Math.max(L.h - ph, state.view.offsetY));
   }
   function bindScrollDrag(thumb, axis) {
     thumb.addEventListener("mousedown", (e) => {
@@ -1823,6 +1858,7 @@
       if (state.mode !== "edit") return;
       const r = cv.getBoundingClientRect(), s = state.screenScale || 1;
       const lx = (e.clientX - r.left) / s, ly = (e.clientY - r.top) / s;
+      const L = logicalSize(cv), LW = L.w, LH = L.h;
       if (state.panning) {
         state.view.offsetX += (e.clientX - state.lastMouse.x) / s;
         state.view.offsetY += (e.clientY - state.lastMouse.y) / s;
@@ -1853,7 +1889,7 @@
         updateInfoBar(nb);
         return;
       }
-      if (lx < 0 || ly < 0 || lx > cv.width || ly > cv.height) {
+      if (lx < 0 || ly < 0 || lx > LW || ly > LH) {
         state.cursorNode = null;
         render();
         return;
@@ -1924,8 +1960,9 @@
       const m = state.minimapRect;
       if (!m) return;
       const wx = (x - m.dx) / m.s, wy = (y - m.dy) / m.s;
-      state.view.offsetX = cv.width / 2 - wx * state.view.zoom;
-      state.view.offsetY = cv.height / 2 - wy * state.view.zoom;
+      const L = logicalSize(cv);
+      state.view.offsetX = L.w / 2 - wx * state.view.zoom;
+      state.view.offsetY = L.h / 2 - wy * state.view.zoom;
       clampView();
       render();
       drawMiniMap();
@@ -1946,10 +1983,7 @@
   var el3 = (id) => document.getElementById(id);
   function renderTestSize() {
     const st = el3("testStage"), cv = canvas4();
-    cv.width = st.clientWidth;
-    cv.height = st.clientHeight;
-    cv.style.width = st.clientWidth + "px";
-    cv.style.height = st.clientHeight + "px";
+    sizeCanvas(cv, st.clientWidth, st.clientHeight);
   }
   function renderTest() {
     const cv = canvas4();
@@ -1988,7 +2022,7 @@
     ctx.fillStyle = "#222";
     ctx.fillRect(0, 0, pw, ph);
     const scene = getSceneLayer();
-    if (scene && scene.width) ctx.drawImage(scene, 0, 0);
+    if (scene && scene.width) ctx.drawImage(scene, 0, 0, pw, ph);
     if (state.layers.entity) drawEntities(ctx);
     if (T.showPath) drawSeek(ctx);
     drawPlayer(ctx, p);
@@ -2287,9 +2321,9 @@
   }
   function drawGridPreview() {
     const cv = $("nmGridPreview");
-    const ctx = cv.getContext("2d");
-    if (!ctx) return;
-    const W = cv.width, H = cv.height, t = state.nmMapType;
+    sizeCanvas(cv, 280, 280);
+    const { ctx, W, H } = context2d(cv);
+    const t = state.nmMapType;
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, W, H);
     ctx.strokeStyle = "#bbb";
@@ -3093,8 +3127,9 @@
       let x = (e.clientX - r.left) / s, y = (e.clientY - r.top) / s;
       const T = state.test;
       if (T && T.follow) {
-        x += T.player.x - cv.width / 2;
-        y += T.player.y - cv.height / 2;
+        const L = logicalSize(cv);
+        x += T.player.x - L.w / 2;
+        y += T.player.y - L.h / 2;
       }
       return { x, y };
     };
@@ -3343,6 +3378,11 @@
           state.undo.redo();
           render();
         }
+        return;
+      }
+      if (e.ctrlKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        if (state.mode === "edit") action2("switchRoadStyle");
         return;
       }
       if (e.key === "Escape") {
