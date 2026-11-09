@@ -11,7 +11,7 @@
     "test": "node tests/unit.test.cjs && node tests/e2e.cjs",
     "test:unit": "node tests/unit.test.cjs",
     "test:e2e": "node tests/e2e.cjs",
-    "serve": "python -m http.server 8900 --bind 127.0.0.1"
+    "serve": "node scripts/serve.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.2",

@@ -1658,7 +1658,11 @@
   // src/ui/overlay.ts
   var toastTimer = null;
   function toast(msg) {
-    const t = $("toast");
+    const t = document.getElementById("toast");
+    if (!t) {
+      console.warn("[toast]", msg);
+      return;
+    }
     t.textContent = msg;
     t.classList.remove("hidden");
     if (toastTimer !== null) clearTimeout(toastTimer);
@@ -2371,12 +2375,21 @@
     render();
   }
   function createSampleMap() {
+    const p = new MapParamsModel({ ...LAUNCH_PARAMS, bgSrc: "assets/map_bg.jpg" });
+    initDocument(p, null);
+    state.view.zoom = 1;
+    state.view.offsetX = -9;
+    state.view.offsetY = -553;
+    render();
+    renderTestSize();
     defaultBg((img) => {
-      const p = new MapParamsModel({ ...LAUNCH_PARAMS, bgImage: img, bgSrc: "assets/map_bg.jpg" });
-      initDocument(p, null);
-      state.view.zoom = 1;
-      state.view.offsetX = -9;
-      state.view.offsetY = -553;
+      if (state.params !== p) return;
+      if (!img) {
+        toast("底图 assets/map_bg.jpg 加载失败：地图仍可编辑，请确认文件存在（用 npm run serve 打开更稳妥）");
+        return;
+      }
+      p.bgImage = img;
+      invalidateAll();
       render();
       renderTestSize();
     });
@@ -2960,12 +2973,20 @@
     return cv;
   }
   function saveCanvasPNG(cv, name) {
+    let url;
+    try {
+      url = cv.toDataURL("image/png");
+    } catch {
+      toast("浏览器不允许从 file:// 页面导出画布（跨源污染）。请用 npm run serve 打开后再导出");
+      return false;
+    }
     const a = document.createElement("a");
-    a.href = cv.toDataURL("image/png");
+    a.href = url;
     a.download = name;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => a.remove(), 500);
+    return true;
   }
   function saveFile() {
     const d = getMapData();
@@ -2978,7 +2999,7 @@
     if (!p) return;
     const cv = buildMapExport(1);
     if (!cv) return;
-    saveCanvasPNG(cv, p.name + ".png");
+    if (!saveCanvasPNG(cv, p.name + ".png")) return;
     toast("地图切片导出：" + cv.width + "×" + cv.height + " 原图 PNG（不含路点/网格）");
   }
   function exportSmall() {
@@ -2988,7 +3009,7 @@
     const scale = Math.min(1, SMALL_EXPORT_MAX / longest);
     const cv = buildMapExport(scale);
     if (!cv) return;
-    saveCanvasPNG(cv, p.name + "_small.png");
+    if (!saveCanvasPNG(cv, p.name + "_small.png")) return;
     toast("地图缩小导出：" + cv.width + "×" + cv.height + " 缩略 PNG（不含路点/网格）");
   }
   function saveSettings() {

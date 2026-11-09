@@ -58,13 +58,30 @@ export function buildMapExport(scale = 1): HTMLCanvasElement | null {
   return cv;
 }
 
-function saveCanvasPNG(cv: HTMLCanvasElement, name: string): void {
+/**
+ * Save a canvas as a PNG download.
+ *
+ * `toDataURL` throws on a **tainted** canvas, which is exactly what happens when
+ * the page is opened straight from disk (`file://`): the background image is
+ * same-directory but still counts as cross-origin, so the canvas can never be
+ * read back. Report it instead of throwing into the void — otherwise the export
+ * menu entry just does nothing.
+ */
+function saveCanvasPNG(cv: HTMLCanvasElement, name: string): boolean {
+  let url: string;
+  try {
+    url = cv.toDataURL('image/png');
+  } catch {
+    toast('浏览器不允许从 file:// 页面导出画布（跨源污染）。请用 npm run serve 打开后再导出');
+    return false;
+  }
   const a = document.createElement('a');
-  a.href = cv.toDataURL('image/png');
+  a.href = url;
   a.download = name;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => a.remove(), 500);
+  return true;
 }
 
 export function saveFile(): void {
@@ -79,7 +96,7 @@ export function exportTiles(): void {
   if (!p) return;
   const cv = buildMapExport(1);
   if (!cv) return;
-  saveCanvasPNG(cv, p.name + '.png');
+  if (!saveCanvasPNG(cv, p.name + '.png')) return;
   toast('地图切片导出：' + cv.width + '×' + cv.height + ' 原图 PNG（不含路点/网格）');
 }
 /** 地图缩小导出（ctrl + T）— the same clean map, scaled down for a thumbnail. */
@@ -90,7 +107,7 @@ export function exportSmall(): void {
   const scale = Math.min(1, SMALL_EXPORT_MAX / longest);
   const cv = buildMapExport(scale);
   if (!cv) return;
-  saveCanvasPNG(cv, p.name + '_small.png');
+  if (!saveCanvasPNG(cv, p.name + '_small.png')) return;
   toast('地图缩小导出：' + cv.width + '×' + cv.height + ' 缩略 PNG（不含路点/网格）');
 }
 

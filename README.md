@@ -70,13 +70,22 @@ TypeScript + Canvas 2D   ·   零运行时依赖   ·   4.6k 行源码   ·   16
 
 ## 快速开始
 
+**只想用，不想装环境** —— 下载仓库（`Code → Download ZIP`）解压，双击根目录的
+`index.html` 就能打开。页面是纯静态的，不依赖 Node，也不需要联网。
+
+> 用 `file://` 打开时浏览器会禁止"读回画布像素"，所以 **导出 PNG 会失败**
+> （会明确提示，不会静默什么都不发生）。要导出就用下面的本地服务。
+
+**从源码跑**
+
 ```bash
 npm install
 npm run build          # 类型检查 + 打包到 dist/
-npm run serve          # 静态服务 http://127.0.0.1:8900
+npm run serve          # 静态服务，自动找空闲端口并打印地址
 ```
 
-浏览器打开 `http://127.0.0.1:8900/index.html` 即可。开箱带一张示例地图
+`npm run serve` 是零依赖的 Node 脚本（不需要 Python），会打印形如
+`http://127.0.0.1:8900/index.html` 的地址，打开它即可。开箱带一张示例地图
 （六边形 + 丛林底图），可以直接上手画。
 
 ```bash
@@ -84,8 +93,22 @@ npm run dev            # 监听 src/**/*.ts 自动重建
 npm test               # 单测 + 端到端
 ```
 
-> 打包产物是普通 IIFE 脚本，`dist/` 目录整个拷到任意静态服务器（或直接 `file://` 打开
-> `dist/index.html`）都能跑，不依赖 Node。
+> 打包产物是普通 IIFE 脚本，`dist/` 目录整个拷到任意静态服务器都能跑，不依赖 Node。
+> 注意 `index.html` 在**仓库根目录**，不在 `dist/` 里 —— `dist/` 只放 `app.js` 和
+> `style.css`。
+
+### 打开后是白屏 / 没有示例地图？
+
+先看页面顶部有没有一条红色横幅 —— 它会直接写出失败原因（`dist/app.js` 没加载、
+初始化抛错等），而不是留一张白纸。常见两种：
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| 红色横幅写着 `dist/app.js 没能加载` | 解压工具跳过了 `dist/` 目录，或静态服务的根目录指错了 | 确认 `index.html` 同级存在 `dist/app.js`、`dist/style.css` |
+| 有网格但没底图，底部提示 `map_bg.jpg 加载失败` | `assets/` 没解压全 | 确认 `assets/map_bg.jpg` 存在；地图仍可正常编辑 |
+
+编辑器在底图没到位时也会先把文档建好（网格、路点、导出都可用），不会因为一张图
+缺席就整体起不来。
 
 ---
 
@@ -424,8 +447,14 @@ Protocol（`tests/wsmini.cjs` 是一个两百行的 WebSocket 客户端）。真
 （画路点只许重建 road 层，开关辅助线一层都不许重建）。
 
 `main.ts` 里有一组 `WM*` 测试钩子（`WMNewMap` / `WMPaintAtPixel` / `WMAddEntity` /
-`WMLoadData` / `WMGetMapData` / `WMRender`），它们走的是**和真实 UI 完全相同的代码路径**，
-只是省掉了点击。这样探针不会和界面行为漂移。
+`WMLoadData` / `WMGetMapData` / `WMRender` / `WMLayerStats`），它们走的是**和真实 UI
+完全相同的代码路径**，只是省掉了点击。这样探针不会和界面行为漂移。
+（注意它们是挂到 `window` 上的裸全局，不是 `WMApp` 的属性 —— `WMApp` 是状态对象本身。）
+
+**启动健壮性探针**（`tests/probe_degraded_boot.cjs`）：在 CDP 层用
+`Network.setBlockedURLs` 挡掉 `assets/map_bg.jpg` 或 `dist/app.js`，验证"缺文件"
+不会变成白屏——底图缺失时文档照样建好、能画路点、并弹出说明；`app.js` 缺失时
+红色横幅写明原因和修法。这条探针存在的理由就是：**静默失败比崩溃更难排查**。
 
 ---
 

@@ -190,7 +190,38 @@
   <input type="file" id="globalFileInput" hidden>
 </div>
 
+<!-- Outside #app on purpose: #app is CSS-scaled, the banner must not be. -->
+<div id="bootBanner" style="display:none;position:fixed;left:0;right:0;top:0;z-index:99999;
+  background:#8b1d1d;color:#fff;font:14px/1.7 'Microsoft YaHei',sans-serif;
+  padding:16px 22px;white-space:pre-wrap;box-shadow:0 2px 12px rgba(0,0,0,.5)"></div>
+
 <script>window.__errs=[];window.addEventListener('error',e=>window.__errs.push(String(e.message)+' @ '+(e.filename||'')+':'+e.lineno));window.addEventListener('unhandledrejection',e=>window.__errs.push('rej: '+String(e.reason)));</script>
-<script src="dist/app.js"></script>
+<script src="dist/app.js" onerror="window.__bootErr='dist/app.js 没能加载（文件缺失，或被浏览器/解压工具拦下）'"></script>
+<script>
+/* Boot guard.
+ *
+ * A failed boot used to leave a blank page: no toolbars, no canvas, no message —
+ * indistinguishable from "this download has no default scene". Anything that
+ * stops `init()` from finishing (missing dist/app.js, a thrown error, a blocked
+ * asset) now surfaces as a red bar with the actual reason. Inline styles on
+ * purpose: this must still be readable when dist/style.css is the missing file.
+ */
+(function () {
+  setTimeout(function () {
+    if (typeof window.WMApp !== 'undefined') return;   // booted fine
+    var box = document.getElementById('bootBanner');
+    if (!box) return;
+    var errs = (window.__errs || []).filter(Boolean).slice(0, 3);
+    box.style.display = 'block';
+    box.innerHTML =
+      '<b style="font-size:20px">编辑器启动失败</b><br>' +
+      (window.__bootErr || 'dist/app.js 已加载，但初始化没有跑完') +
+      (errs.length ? '<br>页面报错：' + errs.join('<br>') : '') +
+      '<br><br>请确认仓库根目录下同时存在 <code>index.html</code>、<code>dist/app.js</code>、' +
+      '<code>dist/style.css</code>、<code>assets/map_bg.jpg</code>；' +
+      '也可以运行 <code>npm run serve</code>，打开它打印的地址。';
+  }, 2500);
+})();
+</script>
 </body>
 </html>

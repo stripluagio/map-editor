@@ -21,6 +21,7 @@ export function rebuildPainted(): void {
 import { renderTestSize } from '../render/playmode';
 import { buildPropertyPanel } from '../ui/property';
 import { syncLayerBtns } from '../ui/toolbars';
+import { toast } from '../ui/overlay';
 
 export function defaultBg(cb: (img: HTMLImageElement | null) => void): void {
   if (state.bgImage && state.bgImage.complete && state.bgImage.naturalWidth) {
@@ -74,17 +75,37 @@ export function initDocument(params: MapParamsModel, data: Partial<MapData> | nu
  *   mapItems = [] (no entities on the canvas).
  * The red banner / torii / dark water in the screenshot are part of the
  * background image itself, NOT placed entities or painted road cells.
+ *
+ * The document is created **before** the background image is requested. It used
+ * to be created inside `defaultBg()`'s callback, so the entire sample map hung
+ * off one image request: if `assets/map_bg.jpg` was missing (an incomplete
+ * download) or blocked (some `file://` setups), `createSampleMap` simply never
+ * ran and the editor came up with **no document at all** — an empty canvas, which
+ * reads as "the downloaded copy has no default scene".
  */
 export function createSampleMap(): void {
+  const p = new MapParamsModel({ ...LAUNCH_PARAMS, bgSrc: 'assets/map_bg.jpg' });
+  initDocument(p, null);   // all cells default (1), zero entities
+  // Reproduce the original launch camera framing. Verified by locating the
+  // red banner in both 1920x1080 screenshots: original (920,255), clone at
+  // zoom=1/offset=0 (929,808) -> shift up by 553px, left by 9px.
+  state.view.zoom = 1;
+  state.view.offsetX = -9;
+  state.view.offsetY = -553;
+  render();
+  renderTestSize();
+
+  // Attach the background when it arrives. The map is already editable without
+  // it, so a missing/slow image degrades to "grid only" plus a visible notice
+  // instead of "nothing at all".
   defaultBg(img => {
-    const p = new MapParamsModel({ ...LAUNCH_PARAMS, bgImage: img, bgSrc: 'assets/map_bg.jpg' });
-    initDocument(p, null);   // all cells default (1), zero entities
-    // Reproduce the original launch camera framing. Verified by locating the
-    // red banner in both 1920x1080 screenshots: original (920,255), clone at
-    // zoom=1/offset=0 (929,808) -> shift up by 553px, left by 9px.
-    state.view.zoom = 1;
-    state.view.offsetX = -9;
-    state.view.offsetY = -553;
+    if (state.params !== p) return;        // user already opened another map
+    if (!img) {
+      toast('底图 assets/map_bg.jpg 加载失败：地图仍可编辑，请确认文件存在（用 npm run serve 打开更稳妥）');
+      return;
+    }
+    p.bgImage = img;
+    invalidateAll();
     render();
     renderTestSize();
   });
