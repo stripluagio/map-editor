@@ -116,7 +116,8 @@ function drawSeek(ctx: CanvasRenderingContext2D): void {
   ctx.beginPath();
   for (const n of S.path) dot(n);
   ctx.fill();
-  if (S.lineStep > 0) {
+  // 寻路设置 → 显示寻路导航线（原版 `isDrawNavLine`，默认开）
+  if (S.lineStep > 0 && state.seekSettings.navLine) {
     ctx.strokeStyle = '#2b2b2b';
     ctx.lineWidth = 4;
     ctx.beginPath();

@@ -15,10 +15,12 @@ import { bindKeyboard } from './app/shortcuts';
 import { bindTest } from './app/playmode';
 import { applySettings, loadSettings, getMapData, buildMapExport } from './app/io';
 import { buildToolBars } from './ui/toolbars';
+import { bindSeekPanel } from './ui/seekpanel';
 import { buildMenus, closeMenu } from './ui/menus';
 import { updateToolPanel } from './ui/toolpanel';
 import { buildPropertyPanel } from './ui/property';
 import { bindNewMap, bindOpenMap, paramsFromMapData } from './ui/wizard';
+import { bindExcel } from './app/excel';
 import { bindViews } from './ui/views';
 import { bindOverlay } from './ui/overlay';
 import { render, resizeCanvas } from './render/canvas';
@@ -66,7 +68,9 @@ function init(): void {
   bindViews(applySettings);
   bindKeyboard(action);
   bindTest();
+  bindSeekPanel();
   bindOverlay();
+  bindExcel();
   document.addEventListener('mousedown', closeMenu);
   window.addEventListener('resize', () => { fitStage(); resizeCanvas(); renderTestSize(); });
 
@@ -80,6 +84,8 @@ function init(): void {
     WMAction: action, WMGetMapData: getMapData, WMRender: render, WMRenderTest: renderTest,
     WMExport: { buildMapExport },
     WMCore: { entitySize, entityRing },
+    /** Test seam: 寻路设置（v2.0.2 SeekPathSetRoot）。直接引用，改字段即生效。 */
+    WMSeekSettings: state.seekSettings,
     /** Test seam: per-layer rebuild counters (see render/cache.ts). */
     WMLayerStats: layerStats,
     /** Test seam: build a fresh document of any map type (used by tests/e2e.cjs). */

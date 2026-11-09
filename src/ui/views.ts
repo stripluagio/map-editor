@@ -51,6 +51,12 @@ export function openView(name: ViewName): void {
     ($('nmWidth') as HTMLInputElement).value = '';
     ($('nmHeight') as HTMLInputElement).value = '';
     ($('nmBgPath') as HTMLInputElement).value = '';
+    // 原点模式默认沿用当前地图。原版每次开新图都回到「基于左下角」，
+    // 但那样用户设过一次左上角后，第二张图会悄悄变回去 —— 这里宁可记住。
+    const align = state.params ? (state.params.alignment || 0) : 0;
+    for (const r of document.querySelectorAll<HTMLInputElement>('input[name="nmAlign"]')) {
+      r.checked = Number(r.value) === align;
+    }
     buildNewMapToggles();
     checkToggle(state.nmMapType);
   } else if (name === 'setting') {

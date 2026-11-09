@@ -90,6 +90,84 @@ export function saveFile(): void {
   download(d.name + '.json', JSON.stringify(d.toJson()));
   toast('已保存 ' + d.name + '.json');
 }
+
+/**
+ * 另存为（Shift + S）—— v2.0.2 新增。
+ *
+ * Same bytes as 保存, but it asks the user where to put them. The original calls
+ * `WebFileHandler.saveFile(text, name, ".json", "保存地图数据")`, which prefers the
+ * File System Access API and falls back to a plain download. We do the same:
+ * `showSaveFilePicker` when the browser has it (Chrome/Edge on a secure origin),
+ * otherwise the normal download path — never a dead button.
+ */
+export async function saveAsFile(): Promise<void> {
+  const d = getMapData();
+  if (!d) return;
+  const text = JSON.stringify(d.toJson());
+  const name = d.name + '.json';
+  const picker = (window as unknown as {
+    showSaveFilePicker?: (o: unknown) => Promise<{
+      createWritable(): Promise<{ write(s: string): Promise<void>; close(): Promise<void> }>;
+    }>;
+  }).showSaveFilePicker;
+
+  if (typeof picker === 'function') {
+    try {
+      const handle = await picker({
+        suggestedName: name,
+        types: [{ description: '地图数据', accept: { 'application/json': ['.json'] } }],
+      });
+      const w = await handle.createWritable();
+      await w.write(text);
+      await w.close();
+      toast('已另存为 ' + name);
+      return;
+    } catch (err) {
+      // AbortError = the user cancelled the dialog; anything else falls back.
+      if ((err as { name?: string })?.name === 'AbortError') return;
+    }
+  }
+  download(name, text);
+  toast('浏览器不支持「另存为」对话框，已按普通下载保存 ' + name);
+}
+
+/**
+ * 导入编辑资源 —— v2.0.2 toolbar button.
+ *
+ * The original opens a folder picker, insists the root folder is named
+ * `MapEditorAssets` / `mapAssets` / `MapAssets`, then reads every image into the
+ * preset library so 放置物体 / 放置道具 / 放置事件 get real skins.
+ *
+ * We implement the picker, the exact name validation and the file scan, and keep
+ * the result in `state.importedAssets`. Turning those images into selectable
+ * skins needs the preset-rule UI (`ImportEditAssetsPresetsRuleView`), which is
+ * still missing — so we say that out loud instead of pretending it worked.
+ */
+export function importEditAssets(): void {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.setAttribute('webkitdirectory', '');
+  input.setAttribute('directory', '');
+  input.style.display = 'none';
+  document.body.appendChild(input);
+
+  input.addEventListener('change', () => {
+    const files = Array.from(input.files || []);
+    input.remove();
+    if (!files.length) return;
+    const root = String((files[0] as File & { webkitRelativePath?: string }).webkitRelativePath || '')
+      .split('/')[0];
+    if (root !== 'MapEditorAssets' && root !== 'mapAssets' && root !== 'MapAssets') {
+      toast('上传本地资源只支持命名为 MapEditorAssets 或 mapAssets 或 MapAssets 的根文件目录');
+      return;
+    }
+    const images = files.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f.name));
+    state.importedAssets = images.map(f => f.name);
+    toast('已读取 ' + images.length + ' 张图片（' + root + '）。'
+        + '本版尚未实现「资源预设规则」导入，图片暂未进入可选皮肤列表');
+  });
+  input.click();
+}
 /** 地图切片导出（ctrl + W）— full-size map image, no editor overlays. */
 export function exportTiles(): void {
   const p = state.params;

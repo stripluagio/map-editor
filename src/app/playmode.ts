@@ -13,17 +13,21 @@ import { $ } from '../ui/dom';
 
 const MOVE_SPEED = 200;      // Charactor.moveSpeed
 const TICK_MS = 1000 / 60;
-/** `AStarRoadSeeker.maxStep` — testSeekPathStep gives up after this many expansions. */
-const SEEK_MAX_STEP = 1000;
 /**
  * `SceneMap.testSeekRoad(... , 100)` — that trailing 100 is the delay handed to
  * `setInterval` inside `testSeekPathStep`, i.e. the search advances **one node
  * every 100 ms**. Replaying several expansions per frame (the obvious guess)
  * makes the debug overlay flash past in a fraction of a second.
+ * v2.0.2 exposes that delay as 测试寻路过程帧率（秒）(default 0.1) in the
+ * 寻路设置 panel, so it is read from `state.seekSettings` instead of a constant.
  */
-const SEEK_STEP_S = 0.1;
-/** testSeekPathGraphic.schedule(fn, 0.1, …) — one path segment every 100 ms. */
-const PATH_LINE_INTERVAL = 0.1;
+function seekStepS(): number {
+  // 原版 onTprInputFieldChange: clamp(tpr, .1, 1)
+  const v = state.seekSettings.tpr;
+  return Math.min(1, Math.max(0.1, v || 0.1));
+}
+/** testSeekPathGraphic.schedule(fn, 0.1, …) — one path segment per tick. */
+function pathLineInterval(): number { return seekStepS(); }
 
 /* ---------------- FPS meter ---------------- */
 let fpsFrames = 0, fpsLast = 0;
@@ -200,8 +204,9 @@ function tickSeek(T: TestState, dt: number): void {
   if (!S) return;
   if (S.step < S.frames.length) {
     S.seekT += dt;
-    while (S.seekT >= SEEK_STEP_S && S.step < S.frames.length) {
-      S.seekT -= SEEK_STEP_S;
+    const step = seekStepS();
+    while (S.seekT >= step && S.step < S.frames.length) {
+      S.seekT -= step;
       S.step++;
     }
     return;
@@ -214,8 +219,9 @@ function tickSeek(T: TestState, dt: number): void {
     S.lineStep = Math.min(1, Math.max(0, S.path.length - 1));
   }
   S.lineT += dt;
-  while (S.lineT >= PATH_LINE_INTERVAL) {
-    S.lineT -= PATH_LINE_INTERVAL;
+  const interval = pathLineInterval();
+  while (S.lineT >= interval) {
+    S.lineT -= interval;
     if (S.lineStep < S.path.length - 1) S.lineStep++;
   }
 }
@@ -244,7 +250,8 @@ function pathTo(wx: number, wy: number): Point[] | null {
   void key;
 
   const tryPath = (dx: number, dy: number) =>
-    findPath(state.road, from.dx, from.dy, dx, dy, state.params!.mapType, v => state.pass(v));
+    findPath(state.road, from.dx, from.dy, dx, dy, state.params!.mapType, v => state.pass(v),
+      undefined, 400000, state.seekSettings.optimize);
 
   if (state.cellPass(t.dx, t.dy)) {
     const p = tryPath(t.dx, t.dy);
@@ -304,7 +311,7 @@ export function bindTest(): void {
       stopPlayer(T);
       const dbg: PathDebug = { open: [], closed: [], frames: [] };
       const path = findPath(state.road, from.dx, from.dy, t.dx, t.dy, state.params!.mapType,
-        v => state.pass(v), dbg, SEEK_MAX_STEP);
+        v => state.pass(v), dbg, state.seekSettings.maxStep, state.seekSettings.optimize);
       T.seek = {
         frames: dbg.frames || [], closed: dbg.closed,
         step: 0, seekT: 0, path, lineStep: 0, lineT: 0, started: false,

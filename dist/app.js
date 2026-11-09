@@ -21,7 +21,20 @@
     { value: 2, label: "遮挡路点(E)", color: "#0000ff" },
     { value: 3, label: "隐藏路点(R)", color: "#ffff00" }
   ];
-  var BRUSH_SIZES = [0, 1, 2, 3, 4, 5];
+  var BRUSH_SIZES = [0, 1, 2, 3, 4];
+  var SHIFT_BRUSH_SIZE = 2;
+  function svgIcon(body) {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">' + body + "</svg>";
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  }
+  var BOX = '<rect x="8" y="18" width="48" height="38" rx="4" fill="#c8873c" stroke="#5c3a12" stroke-width="3"/><path d="M8 32h48" stroke="#5c3a12" stroke-width="3"/><rect x="27" y="26" width="10" height="12" fill="#f0c060" stroke="#5c3a12" stroke-width="2"/>';
+  var BARREL = '<ellipse cx="32" cy="20" rx="18" ry="7" fill="#b9762f" stroke="#4d2d0a" stroke-width="3"/><path d="M14 20v26c0 4 8 7 18 7s18-3 18-7V20" fill="#c8873c" stroke="#4d2d0a" stroke-width="3"/><path d="M14 30c6 3 30 3 36 0M14 40c6 3 30 3 36 0" stroke="#7a4a15" stroke-width="2" fill="none"/>';
+  var STONE = '<path d="M22 58V20c0-6 4-10 10-10s10 4 10 10v38z" fill="#9aa0a6" stroke="#3d4247" stroke-width="3"/><path d="M26 30h12M26 38h12M26 46h12" stroke="#3d4247" stroke-width="2"/>';
+  var COIN = '<circle cx="32" cy="32" r="22" fill="#f2c53d" stroke="#8a6a10" stroke-width="3"/><circle cx="32" cy="32" r="13" fill="none" stroke="#8a6a10" stroke-width="2"/>';
+  var POTION = '<path d="M25 12h14v8l6 10v20a8 8 0 0 1-8 8H27a8 8 0 0 1-8-8V30l6-10z" fill="#7fd0f0" stroke="#14425c" stroke-width="3"/><path d="M22 40h20v10a6 6 0 0 1-6 6h-8a6 6 0 0 1-6-6z" fill="#e2564a"/>';
+  var KEY = '<circle cx="18" cy="32" r="11" fill="none" stroke="#d8a520" stroke-width="6"/><path d="M28 32h28M46 32v10M54 32v8" stroke="#d8a520" stroke-width="6" fill="none"/>';
+  var FLAG = '<path d="M18 58V8" stroke="#4a4a4a" stroke-width="5"/><path d="M18 10h30l-6 10 6 10H18z" fill="#e2564a" stroke="#7a1f1a" stroke-width="3"/>';
+  var ZONE = '<rect x="6" y="14" width="52" height="36" rx="4" fill="none" stroke="#4aa3e2" stroke-width="4" stroke-dasharray="8 6"/><path d="M6 14 58 50M58 14 6 50" stroke="#4aa3e2" stroke-width="2" opacity=".55"/>';
   var ENTITY_SKINS = {
     npc: [
       { label: "商人.NPC", icon: "assets/skins/npc_1_shangren.png", objName: "商人.NPC", w: 56, h: 99 },
@@ -85,6 +98,25 @@
     ],
     spawnPoint: [
       { label: "出生点", icon: "assets/skins/spawn_1.png", objName: "出生点", w: 134, h: 207 }
+    ],
+    // ---- v2.0.2 新增的三种放置类型 -------------------------------------------
+    // 原版把这三类的可选资源放在用户导入的 `MapEditorAssets` 里（`EditAssets` +
+    // `ImportCustomAssetsView`），没导入时面板是空的（"没有该类型的编辑数据"）。
+    // 我们还没有资源导入流程，所以给每个类型一个内置占位图，保证工具立刻可用；
+    // 图标用内联 SVG，不额外占仓库体积。
+    obj: [
+      { label: "宝箱物件", icon: svgIcon(BOX), objName: "宝箱物件", w: 72, h: 72 },
+      { label: "木桶物件", icon: svgIcon(BARREL), objName: "木桶物件", w: 64, h: 76 },
+      { label: "石碑物件", icon: svgIcon(STONE), objName: "石碑物件", w: 64, h: 84 }
+    ],
+    prop: [
+      { label: "金币", icon: svgIcon(COIN), objName: "金币", w: 44, h: 44 },
+      { label: "药水", icon: svgIcon(POTION), objName: "药水", w: 44, h: 60 },
+      { label: "钥匙", icon: svgIcon(KEY), objName: "钥匙", w: 56, h: 40 }
+    ],
+    event: [
+      { label: "剧情事件", icon: svgIcon(FLAG), objName: "剧情事件", w: 56, h: 80 },
+      { label: "触发区域", icon: svgIcon(ZONE), objName: "触发区域", w: 96, h: 64 }
     ]
   };
   var TOOL_TITLES = {
@@ -93,7 +125,10 @@
     npc: "放置NPC",
     monster: "放置怪物",
     transfer: "放置传送门",
-    spawnPoint: "放置出生点"
+    spawnPoint: "放置出生点",
+    obj: "放置物体",
+    prop: "放置道具",
+    event: "放置事件"
   };
   var TOOL_TO_ACTION = {
     road: "openRoadWin",
@@ -101,13 +136,18 @@
     npc: "openNpcWin",
     monster: "openMonsterWin",
     transfer: "openTransferWin",
-    spawnPoint: "openSpawnWin"
+    spawnPoint: "openSpawnWin",
+    obj: "openObjWin",
+    prop: "openPropWin",
+    event: "openEventWin"
   };
   var TOOLBAR1 = [
     { label: "新建", w: 100, act: "createNewFile" },
     { label: "打开", w: 100, act: "openFile" },
     { label: "保存", w: 100, act: "saveFile" },
-    { label: "设置", w: 100, act: "showProjectSetting" },
+    { label: "另存为", w: 110, act: "saveAsFile" },
+    { label: "设置", w: 90, act: "showProjectSetting" },
+    { label: "导入编辑资源", w: 150, act: "importEditAssets" },
     { label: "运行（ctr + enter）", w: 180, act: "testProject" },
     { label: "添加可走路点(Q)", w: 180, act: "addEnableNode", hidden: true },
     { label: "添加不可走路点(W)", w: 180, act: "addDisableNode", hidden: true },
@@ -115,23 +155,34 @@
     { label: "添加传送路点(R)", w: 180, act: "addTransferNode", hidden: true },
     { label: "删除路点(D或右键)", w: 180, act: "deleteNode", hidden: true },
     { label: "停止放置路点（T）", w: 180, act: "notDrawNode", hidden: true },
-    { label: "显示小地图(F2)", w: 180, act: "showMiniMap" },
+    { label: "显示小地图(F2)", w: 170, act: "showMiniMap" },
+    { label: "Excel导出数据工具", w: 200, act: "openExcelExportTool" },
     { label: "下载前端框架", w: 150, act: "downloadSource", hidden: true },
     { label: "下载大地图切图工具", w: 240, act: "downloadImageClipTool", hidden: true },
-    { label: "教程", w: 120, act: "showTeach" },
-    { label: "帮助", w: 120, act: "showCopyright" }
+    { label: "教程", w: 90, act: "showTeach" },
+    { label: "地图介绍", w: 120, act: "showIntroduce" },
+    { label: "购买地图编辑器", w: 160, act: "openSaleMapEditor" },
+    { label: "更多游戏项目", w: 150, act: "gotoMoreGame" }
   ];
   var TOOLBAR2 = [
     { label: "隐藏地图（U）", w: 180, act: "showMapLayer", key: "U" },
     { label: "隐藏路点(I)", w: 180, act: "showRoadLayer", key: "I" },
     { label: "隐藏物体(O)", w: 180, act: "showEntityLayer", key: "O" },
     { label: "隐藏网格(P)", w: 180, act: "showGridLayer", key: "P" },
+    { label: "隐藏物体锚点(Y)", w: 200, act: "showAnchor" },
+    { label: "隐藏物体标题", w: 180, act: "showEntityTitle" },
+    { label: "路点编辑模式", w: 180, act: "setEditRoadModel" }
+  ];
+  var TOOLBAR3 = [
     { label: "设置笔刷", w: 110, act: "openBrushWin" },
     { label: "编辑路点", w: 110, act: "openRoadWin" },
     { label: "放置npc", w: 110, act: "openNpcWin" },
     { label: "放置怪物", w: 110, act: "openMonsterWin" },
     { label: "放置传送门", w: 130, act: "openTransferWin" },
-    { label: "放置出生点", w: 130, act: "openSpawnWin" }
+    { label: "放置出生点", w: 130, act: "openSpawnWin" },
+    { label: "放置物体", w: 110, act: "openObjWin" },
+    { label: "放置道具", w: 110, act: "openPropWin" },
+    { label: "放置事件", w: 110, act: "openEventWin" }
   ];
   var TEST_TOOLBAR = [
     { label: "隐藏地图(U)", w: 180, act: "t_showMapLayer" },
@@ -146,6 +197,7 @@
       ["新建", "createNewFile"],
       ["打开（CTRL + O）", "openFile"],
       ["保存（CTRL + S）", "saveFile"],
+      ["另存为（Shift + S）", "saveAsFile"],
       ["sep", ""],
       ["设置", "showProjectSetting"]
     ],
@@ -167,7 +219,7 @@
       ["显示隐藏网格(P)", "showGridLayer"],
       ["显示隐藏辅助线（J）", "toggleAuxLine"],
       ["sep", ""],
-      ["显示地图物体锚点(k)", "showAnchor"],
+      ["显示隐藏锚点(Y)", "showAnchor"],
       ["sep", ""],
       ["剪切(CTRL + X)", "cut"],
       ["复制(CTRL + C)", "copy"],
@@ -178,12 +230,37 @@
       ["地图切片导出（ctrl + W）", "exportTiles"],
       ["地图缩小导出（ctrl + T）", "exportSmall"]
     ],
+    download: [
+      ["基础前端框架Creator_v2.4.15（免费）", "dl_creator_base_2"],
+      ["基础前端框架Creator_v3.8.6（免费）", "dl_creator_base_3"],
+      ["高级前端框架Creator_v2.4.15（付费）", "dl_creator_pro_2"],
+      ["高级前端框架Creator_v3.8.6（付费）", "dl_creator_pro_3"],
+      ["基础前端框架Laya_v3.3.8（免费）", "dl_laya_base_3"],
+      ["高级前端框架Laya_v3.3.8（付费）", "dl_laya_pro_3"],
+      ["基础前端框架Unity_v2022.3.13（免费）", "dl_unity_base"],
+      ["sep", ""],
+      ["下载大地图切图工具", "downloadImageClipTool"]
+    ],
     window: [
       ["小地图预览面板(F2)", "showMiniMap"],
       ["路点编辑模式(N)", "setEditRoadModel"],
       ["普通编辑模式(M)", "setNormalRoadModel"]
     ],
-    help: [["联系我们", "showCopyright"]]
+    tools: [
+      ["Excel导出数据工具", "openExcelExportTool"],
+      ["下载大地图切图工具", "downloadImageClipTool"]
+    ],
+    help: [
+      ["关于在线地图编辑器", "showAbout"],
+      ["联系我们", "showCopyright"]
+    ]
+  };
+  var DOWNLOAD_LINKS = {
+    dl_creator_base_2: "https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/framework/cocos/RPGFramework_base_2.4.15.zip",
+    dl_creator_base_3: "https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/framework/cocos/RPGFramework_base_3.8.6.zip",
+    dl_laya_base_3: "https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/framework/laya/RPGFramework_Base_Laya_3.3.8.zip",
+    dl_unity_base: "https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/framework/unity/RPGMapFramework_2022.3.13.zip",
+    downloadImageClipTool: "https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/tool/ImageClip.zip"
   };
   var ROAD_KEYS = { q: 0, w: 1, e: 2, r: 3, d: -1, t: -2 };
   var VIEW_IDS = {
@@ -193,14 +270,19 @@
     miniMap: "miniMapView",
     teach: "teachView",
     copyright: "copyrightView",
-    sale: "saleView"
+    sale: "saleView",
+    about: "aboutView",
+    excel: "excelView"
   };
   var TYPE_LABEL = {
     npc: "NPC",
     monster: "怪物",
     transfer: "传送门",
     spawnPoint: "出生点",
-    item: "物体"
+    item: "物体",
+    obj: "物体",
+    prop: "道具",
+    event: "事件"
   };
   function entitySize(type, skin) {
     const defs = ENTITY_SKINS[type];
@@ -486,13 +568,26 @@
     EditorSpawnPoint: BASE.concat([
       attr("spawnId", "在当前地图出生点的Id", "number", true, true, "地图出生点Id"),
       attr("defaultSpawn", "设置是否是默认出生点", "bool", true, true, "默认出生点")
-    ])
+    ]),
+    // v2.0.2 新增的三种放置类型。`EditorObjElement` / `EditorEventObjElement`
+    // 在原版里就是 `baseAttributes.concat([])` —— 一个字段都不加，靠 `objName` /
+    // `assetsPath` 区分具体资源；只有道具多了「是否宝箱 / 道具id / 道具数量」。
+    EditorObjElement: BASE.slice(),
+    EditorPropElement: BASE.concat([
+      attr("isTreasure", "是否是宝箱", "bool", true, true, "是否是宝箱"),
+      attr("itemId", "拾取到的道具id", "number", true, true, "道具id"),
+      attr("itemNum", "拾取到的道具数量", "number", true, true, "道具数量")
+    ]),
+    EditorEventObjElement: BASE.slice()
   };
   var TYPE_TO_CLASS = {
     npc: "EditorNPC",
     monster: "EditorMonster",
     transfer: "EditorTransfer",
-    spawnPoint: "EditorSpawnPoint"
+    spawnPoint: "EditorSpawnPoint",
+    obj: "EditorObjElement",
+    prop: "EditorPropElement",
+    event: "EditorEventObjElement"
   };
   function schemaFor(entity) {
     return CLASS_DIC[entity?.className || "EditorElement"] || CLASS_DIC.EditorElement;
@@ -510,6 +605,7 @@
       this.bgName = o.bgName || "map_bg";
       this.bgImage = o.bgImage ?? null;
       this.bgSrc = o.bgSrc ?? null;
+      this.alignment = o.alignment ?? 0;
     }
   };
   var MapDataModel = class _MapDataModel {
@@ -551,6 +647,15 @@
       };
     }
   };
+  var DEFAULT_OBJ_NAME = {
+    npc: "NPC",
+    monster: "怪物",
+    transfer: "传送门",
+    spawnPoint: "出生点",
+    obj: "物体",
+    prop: "道具",
+    event: "事件"
+  };
   function defaultEntity(type, x, y) {
     const cls = TYPE_TO_CLASS[type] || "EditorElement";
     const e = { type: type || "item", className: cls };
@@ -561,7 +666,7 @@
     }
     e.objId = "0";
     e.objType = "0";
-    e.objName = type === "npc" ? "NPC" : type === "monster" ? "怪物" : type === "transfer" ? "传送门" : type === "spawnPoint" ? "出生点" : "item";
+    e.objName = DEFAULT_OBJ_NAME[type] || "item";
     e.skin = "0";
     e.x = Math.round((x || 0) * 1e3) / 1e3;
     e.y = Math.round((y || 0) * 1e3) / 1e3;
@@ -589,7 +694,7 @@
     d.mapHeight = params.mapHeight;
     d.nodeWidth = params.ceilWidth;
     d.nodeHeight = params.ceilHeight;
-    d.alignment = 0;
+    d.alignment = params.alignment || 0;
     d.offsetX = 0;
     d.offsetY = 0;
     d.roadDataArr = road.map((r) => r.slice());
@@ -677,8 +782,8 @@
     }
     return true;
   }
-  function optimizePath(road, path, isPass) {
-    if (path.length < 3) return path;
+  function optimizePath(road, path, isPass, level = 2) {
+    if (level <= 0 || path.length < 3) return path;
     const rows = road.length, cols = road[0].length;
     const pass = (x, y) => y >= 0 && y < rows && x >= 0 && x < cols && isPass(road[y][x]);
     const out = path.slice();
@@ -692,6 +797,7 @@
         i--;
       }
     }
+    if (level < 2) return out;
     for (let i = 0; i < out.length - 2; i++) {
       let far = -1;
       for (let j = out.length - 1; j > i + 1; j--) {
@@ -704,7 +810,7 @@
     }
     return out;
   }
-  function findPath(road, sx, sy, tx, ty, mapType, pass = null, debug, maxSteps = 4e5) {
+  function findPath(road, sx, sy, tx, ty, mapType, pass = null, debug, maxSteps = 4e5, optimize = 2) {
     const rows = road.length;
     if (!rows) return null;
     const cols = road[0].length;
@@ -734,7 +840,7 @@
           path.push({ x: k % cols, y: Math.floor(k / cols) });
           k = came.get(k);
         }
-        return optimizePath(road, path.reverse(), isPass);
+        return optimizePath(road, path.reverse(), isPass, optimize);
       }
       closed.add(cur);
       if (openSet) openSet.delete(cur);
@@ -981,6 +1087,16 @@
       this.entitySkin = 0;
       this.editRoadModel = false;
       this.showAnchor = false;
+      /** v2.0.2 toolBar2 「隐藏物体标题」—— 关闭时只画图标不画名字。 */
+      this.showEntityTitle = true;
+      /**
+       * 按住 Shift 时临时切到大笔刷（原版 `EditBrush.onShiftKeyDown` → `itemList[2]`）。
+       * `shiftBrushPrev` 记住按下前的档位，松键还原 —— 原版的 `lastItem`。
+       */
+      this.shiftBrush = false;
+      this.shiftBrushPrev = 0;
+      /** 导入编辑资源时扫到的图片文件名（预设规则导入尚未实现，见 app/io.ts）。 */
+      this.importedAssets = [];
       /**
        * 原版 `GridLayer._isShowAuxiliaryLine` 默认是 `true`；本项目**故意默认关闭**，
        * 因为那两族矩形辅助线是原版给「画路点时对格子用的参考线」，默认铺满屏很吵。
@@ -1022,6 +1138,15 @@
       // play mode
       this.test = null;
       this.testLoop = null;
+      /** 测试视图 → 寻路设置（v2.0.2 SeekPathSetPanel）。跨次进入测试保留。 */
+      this.seekSettings = {
+        maxStep: 1e3,
+        tpr: 0.1,
+        navLine: true,
+        roadCorner: false,
+        optimize: 2,
+        useRCA: false
+      };
     }
     /** Is the given road value passable? */
     pass(v) {
@@ -1497,16 +1622,18 @@
         ctx.fill();
         ctx.stroke();
       }
-      const topY = -(def?.h || 99) - 10;
-      const label = entityLabel(e);
-      ctx.fillStyle = e.type === "npc" ? "#ff3535" : e.type === "monster" ? "#5599ff" : e.type === "transfer" ? "#40e0e0" : "#ffd040";
-      ctx.font = 'bold 20px "Microsoft YaHei",sans-serif';
-      ctx.textAlign = "center";
-      ctx.strokeStyle = "#2e2e2e";
-      ctx.lineWidth = 3;
-      ctx.lineJoin = "round";
-      ctx.strokeText(label, 0, topY);
-      ctx.fillText(label, 0, topY);
+      if (state.showEntityTitle) {
+        const topY = -(def?.h || 99) - 10;
+        const label = entityLabel(e);
+        ctx.fillStyle = e.type === "npc" ? "#ff3535" : e.type === "monster" ? "#5599ff" : e.type === "transfer" ? "#40e0e0" : "#ffd040";
+        ctx.font = 'bold 20px "Microsoft YaHei",sans-serif';
+        ctx.textAlign = "center";
+        ctx.strokeStyle = "#2e2e2e";
+        ctx.lineWidth = 3;
+        ctx.lineJoin = "round";
+        ctx.strokeText(label, 0, topY);
+        ctx.fillText(label, 0, topY);
+      }
       if (state.selectedEntity === e) {
         const ring = entityRing(String(e.type), skin);
         ctx.strokeStyle = "#ffffff";
@@ -1859,6 +1986,8 @@
   }
   function liveLabel(act, fallback) {
     if (act === "toggleAuxLine") return (state.showAuxLine ? "隐藏辅助线" : "显示辅助线") + "（J）";
+    if (act === "showAnchor") return (state.showAnchor ? "隐藏" : "显示") + "锚点(Y)";
+    if (act === "showEntityTitle") return (state.showEntityTitle ? "隐藏" : "显示") + "物体标题";
     return fallback;
   }
   function closeMenu() {
@@ -1894,6 +2023,13 @@
     $("testInfoPixel").textContent = px;
     $("testInfoGrid").textContent = grid;
     $("testInfoWorld").textContent = world;
+    const align = $("infoAlign");
+    if (align) align.textContent = state.params && state.params.alignment ? "基于左上角" : "基于左下角";
+    const rv = $("infoRoadValue");
+    if (rv) {
+      const v = state.road[n.dy]?.[n.dx];
+      rv.textContent = "(" + (v === void 0 ? "-" : v) + ")";
+    }
   }
   function clampView() {
     const cv = canvas3(), z = state.view.zoom;
@@ -2186,7 +2322,7 @@
     ctx.beginPath();
     for (const n of S.path) dot(n);
     ctx.fill();
-    if (S.lineStep > 0) {
+    if (S.lineStep > 0 && state.seekSettings.navLine) {
       ctx.strokeStyle = "#2b2b2b";
       ctx.lineWidth = 4;
       ctx.beginPath();
@@ -2286,17 +2422,32 @@
       container.appendChild(b);
     }
   }
+  var ALWAYS_VISIBLE = /* @__PURE__ */ new Set([
+    "createNewFile",
+    "openFile",
+    "saveFile",
+    "saveAsFile",
+    "showProjectSetting",
+    "importEditAssets",
+    "testProject",
+    "showMiniMap",
+    "openExcelExportTool",
+    "showTeach",
+    "showIntroduce",
+    "openSaleMapEditor",
+    "gotoMoreGame"
+  ]);
   function setToolbarMode(roadMode) {
-    const normal = /* @__PURE__ */ new Set(["createNewFile", "openFile", "saveFile", "showProjectSetting", "testProject", "showMiniMap", "showTeach", "showCopyright"]);
     for (const b of document.querySelectorAll("#toolBar1 .tb-btn")) {
       const act = b.dataset.act || "";
-      const isNormal = normal.has(act);
+      const isNormal = ALWAYS_VISIBLE.has(act);
       b.classList.toggle("hidden", roadMode ? isNormal : !isNormal);
     }
   }
   function buildToolBars(onClick) {
     buildToolBar($("toolBar1"), TOOLBAR1, onClick);
     buildToolBar($("toolBar2"), TOOLBAR2, onClick);
+    buildToolBar($("toolBar3"), TOOLBAR3, onClick);
     buildToolBar($("testToolBar"), TEST_TOOLBAR, onClick);
   }
   function syncLayerBtns(layers) {
@@ -2310,6 +2461,14 @@
       for (const b of document.querySelectorAll('.tb-btn[data-act="' + act + '"]')) {
         b.textContent = on ? hide : show;
       }
+    }
+  }
+  function syncSwitchBtns(showAnchor, showTitle) {
+    for (const b of document.querySelectorAll('.tb-btn[data-act="showAnchor"]')) {
+      b.textContent = showAnchor ? "隐藏物体锚点(Y)" : "显示物体锚点(Y)";
+    }
+    for (const b of document.querySelectorAll('.tb-btn[data-act="showEntityTitle"]')) {
+      b.textContent = showTitle ? "隐藏物体标题" : "显示物体标题";
     }
   }
 
@@ -2396,6 +2555,10 @@
   }
 
   // src/ui/wizard.ts
+  function readAlignment() {
+    const el4 = document.querySelector('input[name="nmAlign"]:checked');
+    return el4 ? Number(el4.value) || 0 : 0;
+  }
   function buildNewMapToggles() {
     const c = $("nmToggles");
     c.innerHTML = "";
@@ -2514,7 +2677,8 @@
       ceilHeight: nh,
       bgName: state.nmBgName || "map_bg",
       bgImage: state.nmBgImage,
-      bgSrc: state.nmBgSrc
+      bgSrc: state.nmBgSrc,
+      alignment: readAlignment()
     });
     state.bgImage = state.nmBgImage;
     initDocument2(p, null);
@@ -2610,6 +2774,9 @@
       mapHeight: Number(d.mapHeight) || 1080,
       ceilWidth: Number(d.nodeWidth) || 60,
       ceilHeight: Number(d.nodeHeight) || 30,
+      // 原版 v2.0.2 把原点模式写在 MapData.alignment 里，打开时必须原样带回来，
+      // 否则「基于左上角」的地图会被当成「基于左下角」重新导出。
+      alignment: Number(d.alignment) || 0,
       bgImage: state.omBgImage || state.bgImage,
       bgSrc: state.omBgSrc
     });
@@ -2786,6 +2953,10 @@
       $("nmWidth").value = "";
       $("nmHeight").value = "";
       $("nmBgPath").value = "";
+      const align = state.params ? state.params.alignment || 0 : 0;
+      for (const r of document.querySelectorAll('input[name="nmAlign"]')) {
+        r.checked = Number(r.value) === align;
+      }
       buildNewMapToggles();
       checkToggle(state.nmMapType);
     } else if (name === "setting") {
@@ -2994,6 +3165,52 @@
     download(d.name + ".json", JSON.stringify(d.toJson()));
     toast("已保存 " + d.name + ".json");
   }
+  async function saveAsFile() {
+    const d = getMapData();
+    if (!d) return;
+    const text = JSON.stringify(d.toJson());
+    const name = d.name + ".json";
+    const picker = window.showSaveFilePicker;
+    if (typeof picker === "function") {
+      try {
+        const handle = await picker({
+          suggestedName: name,
+          types: [{ description: "地图数据", accept: { "application/json": [".json"] } }]
+        });
+        const w = await handle.createWritable();
+        await w.write(text);
+        await w.close();
+        toast("已另存为 " + name);
+        return;
+      } catch (err) {
+        if (err?.name === "AbortError") return;
+      }
+    }
+    download(name, text);
+    toast("浏览器不支持「另存为」对话框，已按普通下载保存 " + name);
+  }
+  function importEditAssets() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.setAttribute("webkitdirectory", "");
+    input.setAttribute("directory", "");
+    input.style.display = "none";
+    document.body.appendChild(input);
+    input.addEventListener("change", () => {
+      const files = Array.from(input.files || []);
+      input.remove();
+      if (!files.length) return;
+      const root = String(files[0].webkitRelativePath || "").split("/")[0];
+      if (root !== "MapEditorAssets" && root !== "mapAssets" && root !== "MapAssets") {
+        toast("上传本地资源只支持命名为 MapEditorAssets 或 mapAssets 或 MapAssets 的根文件目录");
+        return;
+      }
+      const images = files.filter((f) => /\.(png|jpg|jpeg|webp)$/i.test(f.name));
+      state.importedAssets = images.map((f) => f.name);
+      toast("已读取 " + images.length + " 张图片（" + root + "）。本版尚未实现「资源预设规则」导入，图片暂未进入可选皮肤列表");
+    });
+    input.click();
+  }
   function exportTiles() {
     const p = state.params;
     if (!p) return;
@@ -3038,9 +3255,13 @@
   // src/app/playmode.ts
   var MOVE_SPEED = 200;
   var TICK_MS = 1e3 / 60;
-  var SEEK_MAX_STEP = 1e3;
-  var SEEK_STEP_S = 0.1;
-  var PATH_LINE_INTERVAL = 0.1;
+  function seekStepS() {
+    const v = state.seekSettings.tpr;
+    return Math.min(1, Math.max(0.1, v || 0.1));
+  }
+  function pathLineInterval() {
+    return seekStepS();
+  }
   var fpsFrames = 0;
   var fpsLast = 0;
   function fpsTick() {
@@ -3197,8 +3418,9 @@
     if (!S) return;
     if (S.step < S.frames.length) {
       S.seekT += dt;
-      while (S.seekT >= SEEK_STEP_S && S.step < S.frames.length) {
-        S.seekT -= SEEK_STEP_S;
+      const step = seekStepS();
+      while (S.seekT >= step && S.step < S.frames.length) {
+        S.seekT -= step;
         S.step++;
       }
       return;
@@ -3210,8 +3432,9 @@
       S.lineStep = Math.min(1, Math.max(0, S.path.length - 1));
     }
     S.lineT += dt;
-    while (S.lineT >= PATH_LINE_INTERVAL) {
-      S.lineT -= PATH_LINE_INTERVAL;
+    const interval = pathLineInterval();
+    while (S.lineT >= interval) {
+      S.lineT -= interval;
       if (S.lineStep < S.path.length - 1) S.lineStep++;
     }
   }
@@ -3228,7 +3451,18 @@
     const t = state.geom.getNodeByPixel(wx, wy);
     const cols = state.road[0]?.length || 1;
     const key = (dx, dy) => dy * cols + dx;
-    const tryPath = (dx, dy) => findPath(state.road, from.dx, from.dy, dx, dy, state.params.mapType, (v) => state.pass(v));
+    const tryPath = (dx, dy) => findPath(
+      state.road,
+      from.dx,
+      from.dy,
+      dx,
+      dy,
+      state.params.mapType,
+      (v) => state.pass(v),
+      void 0,
+      4e5,
+      state.seekSettings.optimize
+    );
     if (state.cellPass(t.dx, t.dy)) {
       const p = tryPath(t.dx, t.dy);
       if (p && p.length > 1) return p;
@@ -3286,7 +3520,8 @@
           state.params.mapType,
           (v) => state.pass(v),
           dbg,
-          SEEK_MAX_STEP
+          state.seekSettings.maxStep,
+          state.seekSettings.optimize
         );
         T.seek = {
           frames: dbg.frames || [],
@@ -3329,7 +3564,10 @@
     openNpcWin: "npc",
     openMonsterWin: "monster",
     openTransferWin: "transfer",
-    openSpawnWin: "spawnPoint"
+    openSpawnWin: "spawnPoint",
+    openObjWin: "obj",
+    openPropWin: "prop",
+    openEventWin: "event"
   };
   var ROAD_BY_ACTION = {
     addEnableNode: 0,
@@ -3349,7 +3587,10 @@
       showMiniMap: "miniMap",
       showTeach: "teach",
       showCopyright: "copyright",
-      showSaleView: "sale"
+      showSaleView: "sale",
+      openSaleMapEditor: "sale",
+      showAbout: "about",
+      openExcelExportTool: "excel"
     };
     if (views[act]) {
       openView(views[act]);
@@ -3358,6 +3599,14 @@
     }
     if (act === "saveFile") {
       saveFile();
+      return;
+    }
+    if (act === "saveAsFile") {
+      saveAsFile();
+      return;
+    }
+    if (act === "importEditAssets") {
+      importEditAssets();
       return;
     }
     if (act === "testProject") {
@@ -3409,6 +3658,12 @@
         break;
       case "showAnchor":
         state.showAnchor = !state.showAnchor;
+        syncSwitchBtns(state.showAnchor, state.showEntityTitle);
+        render();
+        break;
+      case "showEntityTitle":
+        state.showEntityTitle = !state.showEntityTitle;
+        syncSwitchBtns(state.showAnchor, state.showEntityTitle);
         render();
         break;
       case "toggleAuxLine":
@@ -3431,11 +3686,27 @@
       case "exportSmall":
         exportSmall();
         break;
-      case "downloadSource":
-        window.open("https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/framework/cocos/RPGFramework_base_2.4.8.zip", "_blank");
+      case "showIntroduce":
+        window.open("https://forum.cocos.org/t/topic/171642", "_blank");
         break;
+      case "gotoMoreGame":
+        window.open("https://game-1258223435.cos.ap-guangzhou.myqcloud.com/gameAD/v1.0.0/web-mobile/index.html", "_blank");
+        break;
+      case "downloadSource":
       case "downloadImageClipTool":
-        window.open("https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/tool/ImageClip.zip", "_blank");
+      case "dl_creator_base_2":
+      case "dl_creator_base_3":
+      case "dl_laya_base_3":
+      case "dl_unity_base": {
+        const url = DOWNLOAD_LINKS[act];
+        if (url) window.open(url, "_blank");
+        break;
+      }
+      // 付费框架没有公开下载地址 —— 原版是打开商店窗口 (`showSaleView`)。
+      case "dl_creator_pro_2":
+      case "dl_creator_pro_3":
+      case "dl_laya_pro_3":
+        openView("sale");
         break;
       case "setEditRoadModel":
         setEditRoadModel(true);
@@ -3471,6 +3742,11 @@
       if (e.ctrlKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
         action2("saveFile");
+        return;
+      }
+      if (e.shiftKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        action2("saveAsFile");
         return;
       }
       if (e.ctrlKey && e.key === "Enter") {
@@ -3532,6 +3808,15 @@
         return;
       }
       if (typing) return;
+      if (e.key === "Shift") {
+        if (!state.shiftBrush) {
+          state.shiftBrush = true;
+          state.shiftBrushPrev = state.brushSize;
+          state.brushSize = SHIFT_BRUSH_SIZE;
+          updateToolPanel();
+        }
+        return;
+      }
       if (e.key === " ") {
         state.spaceDown = true;
         e.preventDefault();
@@ -3572,9 +3857,8 @@
         action2("setNormalRoadModel");
         return;
       }
-      if (k === "k") {
-        state.showAnchor = !state.showAnchor;
-        render();
+      if (k === "y" || k === "k") {
+        action2("showAnchor");
         return;
       }
       if (k === "j") {
@@ -3608,6 +3892,11 @@
     });
     window.addEventListener("keyup", (e) => {
       if (e.key === " ") state.spaceDown = false;
+      if (e.key === "Shift" && state.shiftBrush) {
+        state.shiftBrush = false;
+        state.brushSize = state.shiftBrushPrev;
+        updateToolPanel();
+      }
     });
   }
   function astarTest() {
@@ -3644,6 +3933,412 @@
     state.pathPreview = path;
     toast(path ? "A* 寻路：" + path.length + " 步" : "A* 寻路：无路径");
     render();
+  }
+
+  // src/ui/seekpanel.ts
+  function clamp(v, lo, hi) {
+    return Math.min(hi, Math.max(lo, v));
+  }
+  function applyMaxStep(raw) {
+    let n = Math.floor(Number(raw) || 0);
+    if (n === 0) n = 1e3;
+    n = Math.max(1, n);
+    state.seekSettings.maxStep = n;
+    $("seekMaxStep").value = String(n);
+  }
+  function applyTpr(raw) {
+    const n = clamp(Number(raw) || 0.1, 0.1, 1);
+    state.seekSettings.tpr = n;
+    $("seekTpr").value = String(n);
+  }
+  function syncSeekPanel() {
+    const S = state.seekSettings;
+    $("seekMaxStep").value = String(S.maxStep);
+    $("seekTpr").value = String(S.tpr);
+    $("seekNavLine").checked = S.navLine;
+    $("seekRoadCorner").checked = S.roadCorner;
+    for (const r of document.querySelectorAll('input[name="seekType"]')) {
+      r.checked = Number(r.value) === (S.useRCA ? 1 : 0);
+    }
+    for (const r of document.querySelectorAll('input[name="seekOptimize"]')) {
+      r.checked = Number(r.value) === S.optimize;
+    }
+  }
+  function bindSeekPanel() {
+    const maxStep = $("seekMaxStep");
+    maxStep.addEventListener("change", () => applyMaxStep(maxStep.value));
+    maxStep.addEventListener("blur", () => applyMaxStep(maxStep.value));
+    const tpr = $("seekTpr");
+    tpr.addEventListener("change", () => applyTpr(tpr.value));
+    tpr.addEventListener("blur", () => applyTpr(tpr.value));
+    $("seekNavLine").addEventListener("change", (e) => {
+      state.seekSettings.navLine = e.target.checked;
+      renderTest();
+    });
+    for (const r of document.querySelectorAll('input[name="seekType"]')) {
+      r.addEventListener("change", () => {
+        if (r.disabled) return;
+        state.seekSettings.useRCA = Number(r.value) === 1;
+      });
+    }
+    for (const r of document.querySelectorAll('input[name="seekOptimize"]')) {
+      r.addEventListener("change", () => {
+        if (r.disabled) return;
+        state.seekSettings.optimize = Number(r.value);
+      });
+    }
+    syncSeekPanel();
+  }
+
+  // src/app/excel.ts
+  var TEXT = new TextDecoder("utf-8");
+  function findEocd(dv) {
+    const min = Math.max(0, dv.byteLength - 65557);
+    for (let i = dv.byteLength - 22; i >= min; i--) {
+      if (dv.getUint32(i, true) === 101010256) return i;
+    }
+    return -1;
+  }
+  function readZipIndex(buf2) {
+    const dv = new DataView(buf2);
+    const eocd = findEocd(dv);
+    if (eocd < 0) throw new Error("不是有效的 xlsx（找不到 zip 目录）");
+    const count = dv.getUint16(eocd + 10, true);
+    let p = dv.getUint32(eocd + 16, true);
+    const out = /* @__PURE__ */ new Map();
+    for (let i = 0; i < count; i++) {
+      if (dv.getUint32(p, true) !== 33639248) break;
+      const method = dv.getUint16(p + 10, true);
+      const compSize = dv.getUint32(p + 20, true);
+      const nameLen = dv.getUint16(p + 28, true);
+      const extraLen = dv.getUint16(p + 30, true);
+      const commentLen = dv.getUint16(p + 32, true);
+      const localOff = dv.getUint32(p + 42, true);
+      const name = TEXT.decode(new Uint8Array(buf2, p + 46, nameLen));
+      const lNameLen = dv.getUint16(localOff + 26, true);
+      const lExtraLen = dv.getUint16(localOff + 28, true);
+      out.set(name, { name, method, compSize, dataStart: localOff + 30 + lNameLen + lExtraLen });
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    return out;
+  }
+  async function unzipText(buf2, entry) {
+    if (!entry) return null;
+    const raw = new Uint8Array(buf2, entry.dataStart, entry.compSize);
+    if (entry.method === 0) return TEXT.decode(raw);
+    if (entry.method !== 8) return null;
+    const ds = new DecompressionStream("deflate-raw");
+    const stream = new Blob([raw]).stream().pipeThrough(ds);
+    return new Response(stream).text();
+  }
+  function xmlDoc(text) {
+    return new DOMParser().parseFromString(text, "application/xml");
+  }
+  function colIndex(ref) {
+    let n = 0;
+    for (const ch of ref) {
+      const c = ch.charCodeAt(0);
+      if (c >= 65 && c <= 90) n = n * 26 + (c - 64);
+      else break;
+    }
+    return n - 1;
+  }
+  function parseSharedStrings(xml) {
+    if (!xml) return [];
+    const doc = xmlDoc(xml);
+    return Array.from(doc.getElementsByTagName("si")).map((si) => Array.from(si.getElementsByTagName("t")).map((t) => t.textContent || "").join(""));
+  }
+  function parseSheet(xml, shared) {
+    const doc = xmlDoc(xml);
+    const rows = [];
+    for (const row of Array.from(doc.getElementsByTagName("row"))) {
+      const cells = [];
+      for (const c of Array.from(row.getElementsByTagName("c"))) {
+        const ref = c.getAttribute("r") || "";
+        const idx = ref ? colIndex(ref) : cells.length;
+        const t = c.getAttribute("t");
+        let val = "";
+        if (t === "s") {
+          const v = c.getElementsByTagName("v")[0];
+          val = v ? shared[Number(v.textContent)] ?? "" : "";
+        } else if (t === "inlineStr") {
+          val = Array.from(c.getElementsByTagName("t")).map((x) => x.textContent || "").join("");
+        } else {
+          const v = c.getElementsByTagName("v")[0];
+          val = v ? v.textContent || "" : "";
+        }
+        while (cells.length < idx) cells.push("");
+        cells[idx] = val;
+      }
+      rows.push(cells);
+    }
+    return rows;
+  }
+  async function readXlsx(buf2) {
+    const index = readZipIndex(buf2);
+    const shared = parseSharedStrings(await unzipText(buf2, index.get("xl/sharedStrings.xml")));
+    const wbXml = await unzipText(buf2, index.get("xl/workbook.xml"));
+    const names = [];
+    if (wbXml) {
+      const doc = xmlDoc(wbXml);
+      for (const s of Array.from(doc.getElementsByTagName("sheet"))) {
+        names.push(s.getAttribute("name") || "");
+      }
+    }
+    const sheets2 = [];
+    for (let i = 1; i <= Math.max(1, names.length); i++) {
+      const xml = await unzipText(buf2, index.get(`xl/worksheets/sheet${i}.xml`));
+      if (xml == null) continue;
+      const rows = parseSheet(xml, shared);
+      if (!rows.length) continue;
+      sheets2.push({ name: names[i - 1] || "Sheet" + i, rows });
+    }
+    if (!sheets2.length) throw new Error("这个 xlsx 里没有可读的工作表");
+    return sheets2;
+  }
+  function parseDelimited(text, sep) {
+    const rows = [];
+    let row = [];
+    let cell = "";
+    let quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"') {
+          if (text[i + 1] === '"') {
+            cell += '"';
+            i++;
+          } else quoted = false;
+        } else cell += ch;
+        continue;
+      }
+      if (ch === '"') {
+        quoted = true;
+        continue;
+      }
+      if (ch === sep) {
+        row.push(cell);
+        cell = "";
+        continue;
+      }
+      if (ch === "\r") continue;
+      if (ch === "\n") {
+        row.push(cell);
+        rows.push(row);
+        row = [];
+        cell = "";
+        continue;
+      }
+      cell += ch;
+    }
+    if (cell.length || row.length) {
+      row.push(cell);
+      rows.push(row);
+    }
+    return rows.filter((r) => r.some((c) => c.trim() !== ""));
+  }
+  var TYPES = ["int", "number", "string", "bool", "any"];
+  function toType(raw) {
+    const s = (raw || "").trim().toLowerCase();
+    if (s === "int" || s === "integer") return "int";
+    if (s === "number" || s === "float" || s === "double") return "number";
+    if (s === "string" || s === "str" || s === "text") return "string";
+    if (s === "bool" || s === "boolean") return "bool";
+    return TYPES.includes(s) ? s : "any";
+  }
+  function readFields(rows) {
+    if (rows.length < 3) throw new Error("最少3行：第一行是描述，第二行是字段名，第三行是字段类型");
+    const desc = rows[0], names = rows[1], types = rows[2];
+    const fields = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (let c = 0; c < names.length; c++) {
+      const name = (names[c] || "").trim();
+      if (!name) continue;
+      if (seen.has(name)) throw new Error("出现重复值：字段名「" + name + "」重复");
+      seen.add(name);
+      fields.push({ name, type: toType(types[c] || ""), desc: (desc[c] || "").trim() });
+    }
+    if (!fields.length) throw new Error("第二行没有读到任何字段名");
+    return { fields, dataRows: rows.slice(3) };
+  }
+  function coerce(v, t) {
+    const s = (v ?? "").trim();
+    if (t === "int") {
+      const n = parseInt(s, 10);
+      return Number.isFinite(n) ? n : 0;
+    }
+    if (t === "number") {
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    }
+    if (t === "bool") return /^(1|true|yes|是)$/i.test(s);
+    return s;
+  }
+  function toJson(fields, dataRows) {
+    const arr = dataRows.map((r) => {
+      const o = {};
+      fields.forEach((f, i) => {
+        o[f.name] = coerce(r[i], f.type);
+      });
+      return o;
+    });
+    return JSON.stringify(arr, null, 2);
+  }
+  function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function toXml(fields, dataRows) {
+    const body = dataRows.map((r) => {
+      const inner = fields.map((f, i) => "    <" + f.name + ">" + esc(r[i] ?? "") + "</" + f.name + ">").join("\n");
+      return "  <item>\n" + inner + "\n  </item>";
+    }).join("\n");
+    return '<?xml version="1.0" encoding="utf-8"?>\n<root>\n' + body + "\n</root>\n";
+  }
+  var TS_TYPE = {
+    int: "number",
+    number: "number",
+    string: "string",
+    bool: "boolean",
+    any: "any"
+  };
+  function toTs(fields, dataRows, tableName) {
+    const iface = "export interface " + tableName + " {\n" + fields.map((f) => "  /** " + (f.desc || f.name) + " */\n  " + f.name + ": " + TS_TYPE[f.type] + ";").join("\n") + "\n}\n";
+    const arr = dataRows.map((r) => {
+      const o = fields.map((f, i) => {
+        const v = coerce(r[i], f.type);
+        return f.name + ": " + (typeof v === "string" ? JSON.stringify(v) : String(v));
+      }).join(", ");
+      return "  { " + o + " },";
+    }).join("\n");
+    return iface + "\nexport const " + tableName + "List: " + tableName + "[] = [\n" + arr + "\n];\n";
+  }
+  var DEMO = [
+    ["道具名称", "道具编号", "售价", "可否堆叠", "说明"],
+    ["name", "id", "price", "stackable", "desc"],
+    ["string", "int", "number", "bool", "string"],
+    ["小血瓶", "1001", "15", "true", "恢复 30 点生命"],
+    ["大血瓶", "1002", "45", "true", "恢复 120 点生命"],
+    ["铁剑", "2001", "120", "false", "攻击力 +8"],
+    ["钥匙", "3001", "0", "false", "开启地牢大门"]
+  ];
+  var sheets = [];
+  function $2(id) {
+    return document.getElementById(id);
+  }
+  function currentTable() {
+    const sel = $2("excelSheet");
+    const i = Number(sel.value) || 0;
+    return sheets[i] || null;
+  }
+  function renderSheetSelect() {
+    const sel = $2("excelSheet");
+    sel.innerHTML = "";
+    sheets.forEach((s, i) => {
+      const o = document.createElement("option");
+      o.value = String(i);
+      o.textContent = s.name;
+      sel.appendChild(o);
+    });
+    sel.value = "0";
+  }
+  function renderPreview() {
+    const box = $2("excelPreview");
+    const t = currentTable();
+    if (!t) {
+      box.innerHTML = '<div class="excel-empty">还没有数据</div>';
+      return;
+    }
+    const rows = t.rows.slice(0, 40);
+    const html = ["<table>"];
+    rows.forEach((r, ri) => {
+      const tag = ri === 0 ? "th" : "td";
+      html.push("<tr>" + r.map((c) => "<" + tag + ">" + esc(c ?? "") + "</" + tag + ">").join("") + "</tr>");
+    });
+    html.push("</table>");
+    if (t.rows.length > 40) html.push('<div class="excel-empty">仅预览前 40 行，共 ' + t.rows.length + " 行</div>");
+    box.innerHTML = html.join("");
+  }
+  function setSheets(next, note) {
+    sheets = next;
+    renderSheetSelect();
+    renderPreview();
+    $2("excelStatus").textContent = note;
+  }
+  async function loadFile(file) {
+    const buf2 = await file.arrayBuffer();
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith(".xlsx")) {
+      const s = await readXlsx(buf2);
+      setSheets(s, "已加载 " + file.name + "（" + s.length + " 个表单）");
+      return;
+    }
+    const text = TEXT.decode(new Uint8Array(buf2));
+    const sep = lower.endsWith(".tsv") ? "	" : text.indexOf("	") >= 0 && text.indexOf(",") < 0 ? "	" : ",";
+    setSheets(
+      [{ name: file.name.replace(/\.[^.]+$/, ""), rows: parseDelimited(text, sep) }],
+      "已加载 " + file.name
+    );
+  }
+  function bindExcel() {
+    const file = $2("excelFile");
+    $2("excelPick").addEventListener("click", () => file.click());
+    file.addEventListener("change", () => {
+      const f = file.files && file.files[0];
+      if (!f) return;
+      loadFile(f).catch((err) => {
+        $2("excelStatus").textContent = "读取文件失败：" + err.message;
+      });
+      file.value = "";
+    });
+    $2("excelDemo").addEventListener("click", () => {
+      setSheets([{ name: "道具表", rows: DEMO.map((r) => r.slice()) }], "已载入示例表（道具表）");
+    });
+    $2("excelSheet").addEventListener("change", renderPreview);
+    $2("excelExport").addEventListener("click", () => {
+      const t = currentTable();
+      if (!t) {
+        $2("excelStatus").textContent = "还没选择Excel文件";
+        return;
+      }
+      let fields, dataRows;
+      try {
+        const parsed = readFields(t.rows);
+        fields = parsed.fields;
+        dataRows = parsed.dataRows;
+      } catch (err) {
+        $2("excelStatus").textContent = "导出数据发生异常：" + err.message;
+        return;
+      }
+      const kind = $2("excelType").value;
+      const tableName = (t.name || "Table").replace(/[^\w\u4e00-\u9fff]/g, "") || "Table";
+      const base = tableName.replace(/[\u4e00-\u9fff]/g, "") || "data";
+      let text, name, mime;
+      if (kind === "xml") {
+        text = toXml(fields, dataRows);
+        name = base + ".xml";
+        mime = "application/xml";
+      } else if (kind === "ts") {
+        text = toTs(fields, dataRows, base.charAt(0).toUpperCase() + base.slice(1));
+        name = base + ".ts";
+        mime = "text/plain";
+      } else {
+        text = toJson(fields, dataRows);
+        name = base + ".json";
+        mime = "application/json";
+      }
+      const blob = new Blob([text], { type: mime + ";charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }, 500);
+      $2("excelStatus").textContent = "完成导出 " + name + "（" + dataRows.length + " 行 / " + fields.length + " 个字段）";
+    });
+    renderPreview();
   }
 
   // src/main.ts
@@ -3684,7 +4379,9 @@
     bindViews(applySettings);
     bindKeyboard(action);
     bindTest();
+    bindSeekPanel();
     bindOverlay();
+    bindExcel();
     document.addEventListener("mousedown", closeMenu);
     window.addEventListener("resize", () => {
       fitStage();
@@ -3703,6 +4400,8 @@
       WMRenderTest: renderTest,
       WMExport: { buildMapExport },
       WMCore: { entitySize, entityRing },
+      /** Test seam: 寻路设置（v2.0.2 SeekPathSetRoot）。直接引用，改字段即生效。 */
+      WMSeekSettings: state.seekSettings,
       /** Test seam: per-layer rebuild counters (see render/cache.ts). */
       WMLayerStats: layerStats,
       /** Test seam: build a fresh document of any map type (used by tests/e2e.cjs). */

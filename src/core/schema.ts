@@ -39,14 +39,27 @@ export const CLASS_DIC: Record<string, AttributeDef[]> = {
     attr('spawnId', '在当前地图出生点的Id', 'number', true, true, '地图出生点Id'),
     attr('defaultSpawn', '设置是否是默认出生点', 'bool', true, true, '默认出生点'),
   ]),
+  // v2.0.2 新增的三种放置类型。`EditorObjElement` / `EditorEventObjElement`
+  // 在原版里就是 `baseAttributes.concat([])` —— 一个字段都不加，靠 `objName` /
+  // `assetsPath` 区分具体资源；只有道具多了「是否宝箱 / 道具id / 道具数量」。
+  EditorObjElement: BASE.slice(),
+  EditorPropElement: BASE.concat([
+    attr('isTreasure', '是否是宝箱', 'bool', true, true, '是否是宝箱'),
+    attr('itemId', '拾取到的道具id', 'number', true, true, '道具id'),
+    attr('itemNum', '拾取到的道具数量', 'number', true, true, '道具数量'),
+  ]),
+  EditorEventObjElement: BASE.slice(),
 };
 
 export const TYPE_TO_CLASS: Record<string, string> = {
   npc: 'EditorNPC', monster: 'EditorMonster',
   transfer: 'EditorTransfer', spawnPoint: 'EditorSpawnPoint',
+  obj: 'EditorObjElement', prop: 'EditorPropElement', event: 'EditorEventObjElement',
 };
 
-export const ENTITY_TYPES: EntityType[] = ['npc', 'monster', 'transfer', 'spawnPoint'];
+export const ENTITY_TYPES: EntityType[] = [
+  'npc', 'monster', 'transfer', 'spawnPoint', 'obj', 'prop', 'event',
+];
 
 export function schemaFor(entity: { className?: string } | null): AttributeDef[] {
   return CLASS_DIC[entity?.className || 'EditorElement'] || CLASS_DIC.EditorElement;

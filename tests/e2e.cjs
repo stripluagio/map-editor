@@ -8,7 +8,7 @@ const http=require('http'),fs=require('fs'),path=require('path'),{spawn}=require
 const WS=require('./wsmini.cjs');
 const CHROME=process.env.CHROME||'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const URL=process.env.URL||'http://127.0.0.1:8900/index.html';
-const PORT=9341, PROFILE=path.join(require('os').tmpdir(),'wmc-e2e-profile');
+const PORT=9341, PROFILE=path.join(require('os').tmpdir(),'wmc-e2e-profile-'+process.pid+'-'+Date.now());
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function get(p){return new Promise((res,rej)=>http.get({host:'127.0.0.1',port:PORT,path:p},r=>{let d='';r.on('data',c=>d+=c);r.on('end',()=>res(JSON.parse(d)));}).on('error',rej));}
 
@@ -17,19 +17,25 @@ function ok(name,cond,extra){ if(cond){pass++;console.log('  PASS  '+name);} els
 function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
 
 (async()=>{
+  /* A fresh profile per run + cache disabled. A reused profile serves the
+   * previous run's dist/style.css from the HTTP cache, which silently makes the
+   * layout assertions test the *old* stylesheet (that is exactly how a stale
+   * `#toolBar3` rule once hid a real bug). */
   const ch=spawn(CHROME,['--headless=new','--disable-gpu','--no-sandbox','--hide-scrollbars',
     '--window-size=1920,1080','--autoplay-policy=no-user-gesture-required',
-    `--remote-debugging-port=${PORT}`,'--user-data-dir='+PROFILE,URL],{stdio:'ignore'});
+    `--remote-debugging-port=${PORT}`,'--user-data-dir='+PROFILE,'about:blank'],{stdio:'ignore'});
   let pages=null;
-  for(let i=0;i<60;i++){try{pages=await get('/json/list');if(pages.some(p=>p.type==='page'&&p.url.includes('8900')))break;}catch(e){}await sleep(300);}
+  for(let i=0;i<60;i++){try{pages=await get('/json/list');if(pages.some(p=>p.type==='page'))break;}catch(e){}await sleep(300);}
   if(!pages){console.error('cannot connect to chrome');process.exit(1);}
-  const page=pages.find(p=>p.type==='page'&&p.url.includes('8900'));
+  const page=pages.find(p=>p.type==='page');
   const ws=new WS(page.webSocketDebuggerUrl); await ws.ready();
   let id=0; const pend=new Map();
   ws.onMessage(m=>{const o=JSON.parse(m);if(o.id&&pend.has(o.id)){pend.get(o.id)(o);pend.delete(o.id);}});
   const send=(method,params={})=>new Promise(res=>{const i=++id;pend.set(i,res);ws.send(JSON.stringify({id:i,method,params}));});
-  await send('Page.enable'); await send('Runtime.enable');
+  await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable');
+  await send('Network.setCacheDisabled',{cacheDisabled:true});
   await send('Emulation.setDeviceMetricsOverride',{width:1920,height:1080,deviceScaleFactor:1,mobile:false});
+  await send('Page.navigate',{url:URL});
   await sleep(2200);
   const ev=async expr=>{const r=await send('Runtime.evaluate',{expression:expr,returnByValue:true,awaitPromise:true});
     if(r.result&&r.result.exceptionDetails)return {__exc:String(r.result.exceptionDetails.text)};
@@ -41,6 +47,16 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   const key=async(k,code)=>{await send('Input.dispatchKeyEvent',{type:'keyDown',key:k,code:code||k,windowsVirtualKeyCode:k.length===1?k.toUpperCase().charCodeAt(0):0});
                             await send('Input.dispatchKeyEvent',{type:'keyUp',key:k,code:code||k,windowsVirtualKeyCode:k.length===1?k.toUpperCase().charCodeAt(0):0});};
   const E=async e=>await ev(e);
+  /* Click by selector instead of hardcoded pixel offsets. The top bar gained a
+   * third toolbar and the info bar in v2.0.2 parity work, which shifts every
+   * y coordinate; selector clicks survive that. */
+  const centerOf=async sel=>JSON.parse(await E('(function(){var e=document.querySelector('+JSON.stringify(sel)+');'
+    +'if(!e)return JSON.stringify(null);var r=e.getBoundingClientRect();'
+    +'return JSON.stringify({x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)})})()'));
+  const clickSel=async sel=>{const p=await centerOf(sel); if(!p) throw new Error('no element: '+sel); await click(p.x,p.y); return p;};
+  const tb3=act=>'#toolBar3 .tb-btn[data-act="'+act+'"]';
+  const tb1=act=>'#toolBar1 .tb-btn[data-act="'+act+'"]';
+  const menu=name=>'.menu-item[data-menu="'+name+'"]';
 
   console.log('== boot / layout ==');
   ok('no JS errors', JSON.stringify(await E('window.__errs'))==='[]', await E('window.__errs'));
@@ -56,9 +72,11 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('all road cells = default 1 (verified original)',
      (await E("WMApp.road.every(function(r){return r.every(function(v){return v===1})})"))===true);
   ok('canvas sized', (await E("document.getElementById('mapCanvas').width"))>1400);
-  ok('menu labels', (await E("[].map.call(document.querySelectorAll('.menu-item'),e=>e.textContent).join(',')"))==='文件,编辑,命令,窗口,帮助');
-  ok('toolbar1 visible labels', (await E("[].filter.call(document.querySelectorAll('#toolBar1 .tb-btn'),function(e){return !e.classList.contains('hidden')}).map(function(e){return e.textContent}).join('|')"))==='新建|打开|保存|设置|运行（ctr + enter）|显示小地图(F2)|教程|帮助');
+  ok('menu labels', (await E("[].map.call(document.querySelectorAll('.menu-item'),e=>e.textContent).join(',')"))==='文件,编辑,命令,下载,窗口,工具,帮助');
+  ok('toolbar1 visible labels', (await E("[].filter.call(document.querySelectorAll('#toolBar1 .tb-btn'),function(e){return !e.classList.contains('hidden')}).map(function(e){return e.textContent}).join('|')"))==='新建|打开|保存|另存为|设置|导入编辑资源|运行（ctr + enter）|显示小地图(F2)|Excel导出数据工具|教程|地图介绍|购买地图编辑器|更多游戏项目');
   ok('toolbar2 first label', (await E("document.querySelector('#toolBar2 .tb-btn').textContent"))==='隐藏地图（U）');
+  eq('toolbar3 has the 9 left-panel tabs',
+     await E("document.querySelectorAll('#toolBar3 .tb-btn').length"), 9);
   ok('left panel title', (await E("document.getElementById('toolTitle').textContent"))==='编辑路点');
   ok('5 road swatches', (await E("document.querySelectorAll('#toolContent .tool-item').length"))===5);
   // 顶部三条的底色是从原版 1920×1080 截图里量出来的：条底 #c7c7c7、按钮 #a7a7a7。
@@ -71,12 +89,12 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
      await E("getComputedStyle(document.querySelector('#toolBar1 .tb-btn')).backgroundColor"), 'rgb(167, 167, 167)');
 
   console.log('== menus ==');
-  await click(36,24);
+  await clickSel(menu('file'));
   ok('file menu opens', (await E("document.getElementById('menuPanel').classList.contains('open')"))===true);
   const items=await E("[].map.call(document.querySelectorAll('.menu-panel-item'),e=>e.textContent).join('|')");
   ok('file menu items', items.includes('新建')&&items.includes('保存（CTRL + S）')&&items.includes('设置'), items);
   await click(900,500); // close
-  await click(140,24);  // edit menu (2nd item: x=97..182)
+  await clickSel(menu('edit'));
   const eitems=await E("[].map.call(document.querySelectorAll('.menu-panel-item'),e=>e.textContent).join('|')");
   ok('edit menu has Q/W/E/R', ['添加可走路点(Q)','添加不可走路点(W)','添加透明行走路点(E)','添加传送路点(R)'].every(s=>eitems.includes(s)), eitems.slice(0,120));
   await click(900,500);
@@ -98,9 +116,37 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('undo restores road cells', (await E('WMApp.road.map(r=>r.join("")).join("")'))===before);
 
   console.log('== brush / entity tools ==');
-  await click(797,105); ok('设置笔刷 opens brush tab', (await E('WMApp.tool'))==='brush', await E('WMApp.tool'));
-  ok('6 brush sizes', (await E("document.querySelectorAll('#toolContent .tool-item').length"))===6);
-  await click(1027,105); ok('放置npc opens NPC tab', (await E('WMApp.tool'))==='npc'&&(await E('WMApp.entityType'))==='npc');
+  const tb3hit = await E(`(function(){
+    var b = document.querySelector('#toolBar3 .tb-btn[data-act="openBrushWin"]');
+    var r = b.getBoundingClientRect();
+    var e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    var mb = document.getElementById('menuBar').getBoundingClientRect();
+    var p3 = document.getElementById('toolBar3').parentElement;
+    return JSON.stringify({
+      btn: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],
+      hit: e ? e.tagName + '.' + (e.className || '') : 'null',
+      panel: document.getElementById('menuPanel').classList.contains('open'),
+      scale: WMApp.screenScale, open: WMApp.openMenu, iw: innerWidth,
+      sy: Math.round(scrollY),
+      mb: [Math.round(mb.top), Math.round(mb.height)],
+      cssTop: getComputedStyle(document.getElementById('toolBar3')).top,
+      cls: document.getElementById('toolBar3').className,
+      pos: getComputedStyle(document.getElementById('toolBar3')).position,
+      inline: document.getElementById('toolBar3').getAttribute('style'),
+      rules: (function () {
+        var out = [], ss = document.styleSheets;
+        for (var i = 0; i < ss.length; i++) {
+          var rs; try { rs = ss[i].cssRules; } catch (e) { continue; }
+          for (var j = 0; j < rs.length; j++) if (/#toolBar3/.test(rs[j].selectorText || '')) out.push(rs[j].cssText.slice(0, 60));
+        }
+        return out;
+      })(),
+      parent: p3.id + '/' + p3.className
+    });
+  })()`);
+  ok('toolbar3 button is on top (not covered)', String(tb3hit).indexOf('tb-btn')>=0, tb3hit);
+  await clickSel(tb3('openBrushWin')); ok('设置笔刷 opens brush tab', (await E('WMApp.tool'))==='brush', await E('WMApp.tool'));  ok('5 brush sizes (live v2.0.2: 0/1/2/3/4)', (await E("document.querySelectorAll('#toolContent .tool-item').length"))===5);
+  await clickSel(tb3('openNpcWin')); ok('放置npc opens NPC tab', (await E('WMApp.tool'))==='npc'&&(await E('WMApp.entityType'))==='npc');
   ok('4 NPC skins (verified original)', (await E("document.querySelectorAll('#toolContent .tool-item').length"))===4);
   ok('NPC labels match original',
      (await E("[].map.call(document.querySelectorAll('#toolContent .tool-label'),e=>e.textContent).join('|')"))==='商人.NPC|任务.NPC|剧情.NPC|特殊.NPC');
@@ -161,17 +207,17 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('scene cache is reused', (await E("(function(){var a=WMRender(),b=WMRender();return true})()"))===true);
 
   console.log('== monster / transfer / spawn selectors ==');
-  await click(1142,105);
+  await clickSel(tb3('openMonsterWin'));
   ok('4 monster skins', (await E("document.querySelectorAll('#toolContent .tool-item').length"))===4);
   ok('monster labels match original',
      (await E("[].map.call(document.querySelectorAll('#toolContent .tool-label'),e=>e.textContent).join('|')"))==='小怪|精英怪|Boss|特殊怪');
   ok('monster icons all different',
      (await E("(function(){var s=[].map.call(document.querySelectorAll('#toolContent .tool-item img'),e=>e.getAttribute('src'));return s.length===4 && new Set(s).size===4})()"))===true);
-  await click(1267,105);
+  await clickSel(tb3('openTransferWin'));
   ok('3 transfer skins', (await E("document.querySelectorAll('#toolContent .tool-item').length"))===3);
   ok('transfer labels match original (incl. 传送们 typo)',
      (await E("[].map.call(document.querySelectorAll('#toolContent .tool-label'),e=>e.textContent).join('|')"))==='类型1.传送们|类型2.传送们|不可视.传送们');
-  await click(1402,105);
+  await clickSel(tb3('openSpawnWin'));
   ok('1 spawn skin', (await E("document.querySelectorAll('#toolContent .tool-item').length"))===1);
 
   console.log('== entity sprite animation (original AnimationController) ==');
@@ -187,7 +233,7 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
      await E("JSON.stringify([WMCore.entitySize('transfer',0),WMCore.entitySize('npc',0)])"));
 
   console.log('== road paint: all 4 values ==');
-  await click(912,105); ok('编辑路点 returns to road tab', (await E('WMApp.tool'))==='road');
+  await clickSel(tb3('openRoadWin')); ok('编辑路点 returns to road tab', (await E('WMApp.tool'))==='road');
   // use a distinct cell per value so each one is newly painted
   const spots = [[600,430],[660,470],[720,510],[780,550]];
   const vals = [['w',1],['q',0],['e',2],['r',3]];
@@ -228,10 +274,10 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   await E("(function(){var r=WMApp.road,m=Math.floor(r.length/2);for(var x=4;x<r[0].length-4;x++)r[m][x]=0;return 1})()");
   await key('a','KeyA');
   ok('A* path preview set', (await E('WMApp.pathPreview?WMApp.pathPreview.length:0'))>0, await E('WMApp.pathPreview?WMApp.pathPreview.length:0'));
-  await click(697,62);
+  await clickSel(tb1('showMiniMap'));
   ok('minimap opens', (await E("!document.getElementById('miniMapView').classList.contains('hidden')"))===true);
   await click(1180,250);
-  await click(367,62);   // 设置 (x=317..417)
+  await clickSel(tb1('showProjectSetting'));
   ok('settings opens', (await E("!document.getElementById('settingView').classList.contains('hidden')"))===true,
      await E("JSON.stringify({act:WMApp.activeView,mode:WMApp.mode})"));
   ok('settings has 4 road rows', (await E("document.querySelectorAll('#stRoadTable .st-tr').length"))===4);
@@ -241,7 +287,7 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('settings closed', (await E("document.getElementById('settingView').classList.contains('hidden')"))===true);
 
   console.log('== new map wizard ==');
-  await click(50,62);
+  await clickSel(tb1('createNewFile'));
   ok('new map opens', (await E("!document.getElementById('newMapView').classList.contains('hidden')"))===true);
   await E("document.querySelectorAll('#nmToggles input')[2].click()");
   ok('hex type selected', (await E('WMApp.nmMapType'))===2);
@@ -258,6 +304,122 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('entity export full schema', shape.i0.length===16, shape.i0);
   ok('no errors at end', JSON.stringify(await E('window.__errs'))==='[]', await E('window.__errs'));
 
+  console.log('== v2.0.2: 关于 / 下载 / 工具 菜单 ==');
+  await clickSel(menu('download'));
+  const dlItems = await E("[].map.call(document.querySelectorAll('.menu-panel-item'),e=>e.textContent).join('|')");
+  ok('下载 menu lists the framework packages',
+     ['基础前端框架Creator_v2.4.15（免费）','基础前端框架Laya_v3.3.8（免费）','基础前端框架Unity_v2022.3.13（免费）','下载大地图切图工具']
+       .every(s => dlItems.includes(s)), dlItems);
+  await click(900,500);
+  await clickSel(menu('tools'));
+  const toolItems = await E("[].map.call(document.querySelectorAll('.menu-panel-item'),e=>e.textContent).join('|')");
+  ok('工具 menu has the Excel tool', toolItems.includes('Excel导出数据工具'), toolItems);
+  await click(900,500);
+  await clickSel(menu('help'));
+  const helpItems = await E("[].map.call(document.querySelectorAll('.menu-panel-item'),e=>e.textContent).join('|')");
+  ok('帮助 menu matches v2.0.2', helpItems.includes('关于在线地图编辑器') && helpItems.includes('联系我们'), helpItems);
+  await click(900,500);
+
+  console.log('== v2.0.2: 关于在线地图编辑器 ==');
+  await E("WMAction('showAbout')");
+  const about = JSON.parse(await E("(function(){var v=document.getElementById('aboutView');"
+    +"return JSON.stringify({open:!v.classList.contains('hidden'),view:WMApp.activeView,"
+    +"text:v.textContent.replace(/\\s+/g,' ')})})()"));
+  ok('about view opens', about.open === true && about.view === 'about', about.view);
+  ok('about view names the version', /v2\.0\.2/.test(about.text), about.text.slice(0, 80));
+  await E("document.querySelector('#aboutView [data-close]').click()");
+  ok('about view closes', (await E('WMApp.activeView'))===null);
+
+  console.log('== v2.0.2: Excel 导出数据工具 ==');
+  await E("WMAction('openExcelExportTool')");
+  ok('excel view opens', (await E("!document.getElementById('excelView').classList.contains('hidden')"))===true);
+  await E("document.getElementById('excelDemo').click()");
+  const xl = JSON.parse(await E("(function(){return JSON.stringify({"
+    +"status:document.getElementById('excelStatus').textContent,"
+    +"sheets:document.getElementById('excelSheet').options.length,"
+    +"preview:document.querySelectorAll('#excelPreview tr').length,"
+    +"types:[].map.call(document.getElementById('excelType').options,function(o){return o.value})})})()"));
+  ok('demo sheet loads', xl.sheets === 1 && xl.preview >= 7, xl);
+  ok('three export formats (json/xml/ts)', xl.types.join(',')==='json,xml,ts', xl.types);
+  for (const kind of ['json', 'xml', 'ts']) {
+    await E("document.getElementById('excelType').value='"+kind+"'");
+    await E("document.getElementById('excelExport').click()");
+    await sleep(120);
+    const st = await E("document.getElementById('excelStatus').textContent");
+    ok('export '+kind+' reports a file', /完成导出/.test(st) && st.indexOf('.'+kind)>=0, st);
+  }
+  await E("document.querySelector('#excelView [data-close]').click()");
+  ok('excel view closes', (await E('WMApp.activeView'))===null);
+
+  console.log('== v2.0.2: 放置物体 / 道具 / 事件 ==');
+  for (const [act, tool, n, title] of [
+    ['openObjWin', 'obj', 3, '放置物体'],
+    ['openPropWin', 'prop', 3, '放置道具'],
+    ['openEventWin', 'event', 2, '放置事件'],
+  ]) {
+    await E("WMAction('"+act+"')");
+    const got = JSON.parse(await E("JSON.stringify({tool:WMApp.tool,type:WMApp.entityType,"
+      +"items:document.querySelectorAll('#toolContent .tool-item').length,"
+      +"title:document.getElementById('toolTitle').textContent})"));
+    ok(act+' opens the '+tool+' tab', got.tool===tool && got.type===tool, got);
+    eq(act+' skin count', got.items, n);
+    eq(act+' panel title', got.title, title);
+  }
+  const propExport = JSON.parse(await E(`(function(){
+    WMAction('openPropWin');
+    document.querySelectorAll('#toolContent .tool-item')[0].dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));
+    var e = WMApp.brushEntity;
+    e.x = 320; e.y = 320; e.isTreasure = true; e.itemId = 1001; e.itemNum = 5;
+    WMApp.entities.push(e); WMApp.brushEntity = null;
+    var d = WMGetMapData().toJson();
+    var it = d.mapItems.filter(function(x){return x.type==='prop'})[0];
+    return JSON.stringify({keys: it ? Object.keys(it) : null, item: it});
+  })()`));
+  ok('道具 exports isTreasure/itemId/itemNum',
+     ['isTreasure','itemId','itemNum'].every(k => propExport.keys.indexOf(k)>=0), propExport.keys);
+  ok('道具 keeps its values', propExport.item.isTreasure===true && propExport.item.itemId===1001 && propExport.item.itemNum===5,
+     propExport.item);
+  ok('道具 schema is BASE + 3 fields', propExport.keys.length===13, propExport.keys.length);
+  // 清掉刚放的这一个，后面的断言仍按空地图算
+  await E("WMApp.entities=WMApp.entities.filter(function(x){return x.type!=='prop'});WMApp.selectedEntity=null;1");
+
+  console.log('== v2.0.2: 地图原点（alignment）==');
+  ok('export writes alignment 0 by default', (await E('WMGetMapData().toJson().alignment'))===0);
+  await E("WMApp.params.alignment=1");
+  eq('export follows params.alignment', await E('WMGetMapData().toJson().alignment'), 1);
+  await E("WMAction('createNewFile')");
+  ok('new-map dialog prefills the current origin mode',
+     (await E("(function(){var r=document.querySelector('input[name=nmAlign]:checked');return r?r.value:'none'})()"))==='1');
+  await E("WMApp.params.alignment=0");
+  await E("WMAction('createNewFile')");
+  ok('origin radio follows alignment=0',
+     (await E("(function(){var r=document.querySelector('input[name=nmAlign]:checked');return r?r.value:'none'})()"))==='0');
+  await E("document.querySelector('#newMapView [data-close]').click()");
+  // 打开一份 alignment=1 的地图数据，必须原样带回来（走「文件 → 打开」同一条路径）
+  const alignRound = JSON.parse(await E(`(function(){
+    var d = WMGetMapData().toJson();
+    d.alignment = 1;
+    var back = WMLoadData(d);
+    return JSON.stringify({params: WMApp.params.alignment, exported: back.alignment});
+  })()`));
+  ok('alignment survives open → export', alignRound.params===1 && alignRound.exported===1, alignRound);
+  await E("WMApp.params.alignment=0;WMLoadData(WMGetMapData().toJson());1");
+
+  console.log('== v2.0.2: 导入编辑资源 目录校验 ==');
+  await E("WMAction('importEditAssets')");
+  const rejected = await E(`(function(){
+    var inp = document.querySelector('input[webkitdirectory]');
+    if (!inp) return 'no-input';
+    var dt = new DataTransfer();
+    dt.items.add(new File(['x'], 'a.png', {type: 'image/png'}));
+    inp.files = dt.files;
+    inp.dispatchEvent(new Event('change'));
+    return document.getElementById('toast').textContent;
+  })()`);
+  ok('wrong root folder is rejected with the original message',
+     /只支持命名为 MapEditorAssets 或 mapAssets 或 MapAssets/.test(String(rejected)), rejected);
+  ok('no errors after the v2.0.2 section', JSON.stringify(await E('window.__errs'))==='[]', await E('window.__errs'));
+
   console.log('== teach video ==');
   await E("WMAction('showTeach')");
   await sleep(2600);
@@ -270,7 +432,7 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('modal closed before play mode', (await E('WMApp.activeView'))===null, await E('WMApp.activeView'));
 
   console.log('== play mode ==');
-  await click(500,62);
+  await clickSel(tb1('testProject'));
   ok('test mode entered', (await E('WMApp.mode'))==='test');
   ok('player spawned', !!(await E('WMApp.test&&WMApp.test.player')));
   ok('follow is off by default (verified original)', (await E('WMApp.test.follow'))===false);
@@ -347,6 +509,98 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   await key('F4','F4');
   ok('F4 off clears the seek overlay', (await E('WMApp.test.seek'))===null);
 
+  console.log('== v2.0.2: 寻路设置面板（SeekPathSetRoot）==');
+  const seekUi = JSON.parse(await E(`(function(){
+    var p = document.getElementById('seekPanel');
+    var r = p.getBoundingClientRect();
+    function lab(id){ var e=document.getElementById(id); return e ? e.parentNode.textContent.replace(/\\s+/g,' ').trim() : null; }
+    return JSON.stringify({
+      shown: !p.classList.contains('hidden') && r.width > 0,
+      title: p.querySelector('.seek-title').textContent,
+      maxStep: document.getElementById('seekMaxStep').value,
+      tpr: document.getElementById('seekTpr').value,
+      navLine: document.getElementById('seekNavLine').checked,
+      roadCorner: document.getElementById('seekRoadCorner').checked,
+      roadCornerDisabled: document.getElementById('seekRoadCorner').disabled,
+      rcaDisabled: document.querySelector('input[name=seekType][value="1"]').disabled,
+      astarChecked: document.querySelector('input[name=seekType][value="0"]').checked,
+      optimize: (function(){var r=document.querySelector('input[name=seekOptimize]:checked');return r?r.value:null})(),
+      groups: [].map.call(p.querySelectorAll('.seek-group-title'), function(e){return e.textContent})
+    });
+  })()`));
+  ok('seek panel is visible in test view', seekUi.shown === true);
+  eq('seek panel title', seekUi.title, '寻路设置');
+  eq('default maxStep = 1000 (live)', seekUi.maxStep, '1000');
+  eq('default tpr = 0.1 (live)', seekUi.tpr, '0.1');
+  ok('显示寻路导航线 defaults on (live)', seekUi.navLine === true);
+  ok('显示路点墙角 defaults off and is disabled (no RCA)', seekUi.roadCorner === false && seekUi.roadCornerDisabled === true);
+  ok('RCA option is present but disabled', seekUi.rcaDisabled === true && seekUi.astarChecked === true);
+  eq('默认优化等级 = 最佳优化', seekUi.optimize, '2');
+  ok('both group titles match the original',
+     seekUi.groups.join('|')==='使用寻路算法类型设置|寻路路径优化等级设置', seekUi.groups);
+
+  // 原版 onTprInputFieldChange: clamp(v, .1, 1)
+  await E("(function(){var e=document.getElementById('seekTpr');e.value='0.05';e.dispatchEvent(new Event('change'))})()");
+  eq('tpr below 0.1 is clamped to 0.1', await E('WMApp.seekSettings.tpr'), 0.1);
+  await E("(function(){var e=document.getElementById('seekTpr');e.value='5';e.dispatchEvent(new Event('change'))})()");
+  eq('tpr above 1 is clamped to 1', await E('WMApp.seekSettings.tpr'), 1);
+  await E("(function(){var e=document.getElementById('seekTpr');e.value='0.1';e.dispatchEvent(new Event('change'))})()");
+  // 原版 onMaxStepInputFieldChange: 0 视为没填 -> 1000
+  await E("(function(){var e=document.getElementById('seekMaxStep');e.value='0';e.dispatchEvent(new Event('change'))})()");
+  eq('maxStep 0 falls back to 1000', await E('WMApp.seekSettings.maxStep'), 1000);
+  await E("(function(){var e=document.getElementById('seekMaxStep');e.value='37';e.dispatchEvent(new Event('change'))})()");
+  eq('maxStep accepts a custom budget', await E('WMApp.seekSettings.maxStep'), 37);
+  await E("(function(){var e=document.getElementById('seekMaxStep');e.value='1000';e.dispatchEvent(new Event('change'))})()");
+
+  // 优化等级必须真的改变路径点数：不优化 > 一般 ≥ 最佳
+  const optCounts = {};
+  for (const lvl of [0, 1, 2]) {
+    await E("WMApp.seekSettings.optimize=" + lvl);
+    if ((await E('WMApp.test.showPath')) === true) await E("WMAction('t_showPath')"); // 先关掉清空 overlay
+    await E("WMAction('t_showPath')");
+    await sleep(60);
+    await click(seekPt.x, seekPt.y);
+    await sleep(420);
+    optCounts['lvl' + lvl] = await E('WMApp.test.seek&&WMApp.test.seek.path?WMApp.test.seek.path.length:-1');
+    await E("WMAction('t_showPath')");
+  }
+  await E('WMApp.seekSettings.optimize=2');
+  ok('优化等级真的影响路径点数 (不优化 > 一般 ≥ 最佳)',
+     optCounts.lvl0 > 0 && optCounts.lvl0 >= optCounts.lvl1 && optCounts.lvl1 >= optCounts.lvl2
+       && optCounts.lvl0 > optCounts.lvl2,
+     optCounts);
+  ok('最佳优化回到默认', (await E('WMApp.seekSettings.optimize'))===2);
+
+  // 显示寻路导航线 必须真的影响画布：把 F4 的展开/画线进度推到末尾再比对像素
+  if ((await E('WMApp.test.showPath')) === false) await E("WMAction('t_showPath')");
+  await click(seekPt.x, seekPt.y);
+  await sleep(500);
+  const darkPixels = () => E(`(function(){
+    var c = document.getElementById('testCanvas'), x = c.getContext('2d');
+    var d = x.getImageData(0, 0, c.width, c.height).data, n = 0;
+    for (var i = 0; i < d.length; i += 4) {
+      // 只认 #2b2b2b(43,43,43) 附近：画布底色是 #222，放宽范围会把底噪算进去
+      if (Math.abs(d[i]-43) <= 3 && Math.abs(d[i+1]-43) <= 3 && Math.abs(d[i+2]-43) <= 3) n++;
+    }
+    return n;
+  })()`);
+  const forceFullLine = `(function(){
+    var S = WMApp.test.seek;
+    if (!S || !S.path) return 'no-path';
+    S.step = S.frames.length; S.lineStep = S.path.length - 1; S.started = true;
+    WMApp.seekSettings.navLine = true; WMRenderTest();
+    return S.path.length;
+  })()`;
+  const forced = await E(forceFullLine);
+  const darkOn = await darkPixels();
+  await E("WMApp.seekSettings.navLine=false;WMRenderTest()");
+  const darkOff = await darkPixels();
+  await E("WMApp.seekSettings.navLine=true;WMRenderTest()");
+  ok('导航线开着时画布上确实有 #2b2b2b 折线', typeof forced === 'number' && darkOn > 0, {forced, darkOn});
+  ok('关掉导航线后黑线消失', darkOff < darkOn * 0.5, {darkOn, darkOff});
+  await E("WMAction('t_showPath')");
+  await E("WMApp.test.path.length=0;WMApp.test.player.moving=false;WMApp.test.player.state='stand';1");
+
   ok('FPS meter is visible in test view', /^FPS \d+$/.test(await E("document.getElementById('testFps').textContent")),
      await E("document.getElementById('testFps').textContent"));
 
@@ -363,7 +617,7 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('test closed', (await E('WMApp.mode'))==='edit');
 
   console.log('== 默认出生点 / spawn default flag ==');
-  await click(1402,105);                       // 放置出生点
+  await clickSel(tb3('openSpawnWin'));         // 放置出生点
   await E("document.querySelector('#toolContent .tool-item').dispatchEvent(new MouseEvent('mousedown',{bubbles:true}))");
   await sleep(120);
   await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:700,y:500,buttons:0});

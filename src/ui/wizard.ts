@@ -11,6 +11,16 @@ import { context2d, sizeCanvas } from '../render/context';
 
 export type InitDocument = (params: MapParamsModel, data: Partial<MapData> | null) => void;
 
+/**
+ * 「地图原点」单选值。0 = 基于左下角（原版旧行为），1 = 基于左上角。
+ * 原版把这个值存进 `MapData.alignment`，由前端框架决定世界坐标的换算方向；
+ * 编辑器自己不做换算，只负责原样保存和回读。
+ */
+function readAlignment(): number {
+  const el = document.querySelector<HTMLInputElement>('input[name="nmAlign"]:checked');
+  return el ? Number(el.value) || 0 : 0;
+}
+
 export function buildNewMapToggles(): void {
   const c = $('nmToggles');
   c.innerHTML = '';
@@ -96,6 +106,7 @@ export function confirmNewMap(initDocument: InitDocument): void {
     mapWidth: mw, mapHeight: mh, ceilWidth: nw, ceilHeight: nh,
     bgName: state.nmBgName || 'map_bg',
     bgImage: state.nmBgImage, bgSrc: state.nmBgSrc,
+    alignment: readAlignment(),
   });
   state.bgImage = state.nmBgImage;
   initDocument(p, null);
@@ -189,6 +200,9 @@ export function paramsFromMapData(d: Record<string, unknown>): MapParamsModel {
     mapType: d.type === undefined || d.type === null ? MapType.angle45 : Number(d.type),
     mapWidth: Number(d.mapWidth) || 1920, mapHeight: Number(d.mapHeight) || 1080,
     ceilWidth: Number(d.nodeWidth) || 60, ceilHeight: Number(d.nodeHeight) || 30,
+    // 原版 v2.0.2 把原点模式写在 MapData.alignment 里，打开时必须原样带回来，
+    // 否则「基于左上角」的地图会被当成「基于左下角」重新导出。
+    alignment: Number(d.alignment) || 0,
     bgImage: state.omBgImage || state.bgImage, bgSrc: state.omBgSrc,
   });
 }

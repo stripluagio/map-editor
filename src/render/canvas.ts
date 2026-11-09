@@ -127,15 +127,18 @@ export function drawEntities(ctx: CanvasRenderingContext2D): void {
       ctx.fillStyle = '#f5d8a8';
       ctx.beginPath(); ctx.arc(0, -78, 15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
-    // name label above the sprite (original NameLabel)
-    const topY = -((def?.h) || 99) - 10;
-    const label = entityLabel(e);
-    ctx.fillStyle = e.type === 'npc' ? '#ff3535' : e.type === 'monster' ? '#5599ff'
-                  : e.type === 'transfer' ? '#40e0e0' : '#ffd040';
-    ctx.font = 'bold 20px "Microsoft YaHei",sans-serif';
-    ctx.textAlign = 'center'; ctx.strokeStyle = '#2e2e2e';
-    ctx.lineWidth = 3; ctx.lineJoin = 'round';
-    ctx.strokeText(label, 0, topY); ctx.fillText(label, 0, topY);
+    // name label above the sprite (original NameLabel). v2.0.2 toolBar2 has a
+    // 「隐藏物体标题」switch, so the label is conditional.
+    if (state.showEntityTitle) {
+      const topY = -((def?.h) || 99) - 10;
+      const label = entityLabel(e);
+      ctx.fillStyle = e.type === 'npc' ? '#ff3535' : e.type === 'monster' ? '#5599ff'
+                    : e.type === 'transfer' ? '#40e0e0' : '#ffd040';
+      ctx.font = 'bold 20px "Microsoft YaHei",sans-serif';
+      ctx.textAlign = 'center'; ctx.strokeStyle = '#2e2e2e';
+      ctx.lineWidth = 3; ctx.lineJoin = 'round';
+      ctx.strokeText(label, 0, topY); ctx.fillText(label, 0, topY);
+    }
     if (state.selectedEntity === e) {
       const ring = entityRing(String(e.type), skin);
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3.6;

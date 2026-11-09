@@ -1,6 +1,9 @@
 import { MapType } from './types';
 import type { Point } from './types';
 
+/** v2.0.2 `PathOptimize`: 0 不优化 / 1 一般优化 / 2 最佳优化. */
+export type OptimizeLevel = 0 | 1 | 2;
+
 /** Binary heap open list (BinaryTreeNode equivalent). */
 export class BinaryHeap<T> {
   private data: T[] = [];
@@ -103,11 +106,16 @@ function lineOfSight(a: Point, b: Point, pass: (x: number, y: number) => boolean
  *      earlier node is walkable collapses the nodes in between.
  * That is why 查看寻路过程(F4) draws a handful of amber dots joined by a few
  * long black segments instead of one dot per cell.
+ *
+ * v2.0.2 exposes the level in 寻路路径优化等级设置 (`PathOptimize`):
+ *   0 不优化 / 1 一般优化 / 2 最佳优化. Level 1 is stage 1 only, level 0 skips
+ * both — which is exactly what the online build's 「打开寻路导航线可看效果」
+ * hint is telling you to compare.
  */
 export function optimizePath(
-  road: number[][], path: Point[], isPass: PassFn,
+  road: number[][], path: Point[], isPass: PassFn, level: OptimizeLevel = 2,
 ): Point[] {
-  if (path.length < 3) return path;
+  if (level <= 0 || path.length < 3) return path;
   const rows = road.length, cols = road[0].length;
   const pass = (x: number, y: number) =>
     y >= 0 && y < rows && x >= 0 && x < cols && isPass(road[y][x]);
@@ -121,6 +129,7 @@ export function optimizePath(
       && Math.abs(b.x - a.x) === Math.abs(b.y - a.y) && b.x !== a.x;
     if (sameCol || sameRow || diag) { out.splice(i, 1); i--; }
   }
+  if (level < 2) return out;
   for (let i = 0; i < out.length - 2; i++) {
     let far = -1;
     for (let j = out.length - 1; j > i + 1; j--) {
@@ -138,6 +147,7 @@ export function optimizePath(
 export function findPath(
   road: number[][], sx: number, sy: number, tx: number, ty: number,
   mapType: MapType, pass: PassFn | null = null, debug?: PathDebug, maxSteps = 400000,
+  optimize: OptimizeLevel = 2,
 ): Point[] | null {
   const rows = road.length;
   if (!rows) return null;
@@ -171,7 +181,7 @@ export function findPath(
       const path: Point[] = [];
       let k: number | undefined = cur;
       while (k !== undefined) { path.push({ x: k % cols, y: Math.floor(k / cols) }); k = came.get(k); }
-      return optimizePath(road, path.reverse(), isPass);
+      return optimizePath(road, path.reverse(), isPass, optimize);
     }
     closed.add(cur);
     if (openSet) openSet.delete(cur);

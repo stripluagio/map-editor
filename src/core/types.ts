@@ -44,6 +44,12 @@ export interface MapParams {
   bgName: string;
   bgImage: HTMLImageElement | null;
   bgSrc: string | null;
+  /**
+   * 坐标原点模式 —— 原版 v2.0.2 新增。
+   * 0 = 基于左下角（原版旧行为，y 轴向上），1 = 基于左上角（y 轴向下）。
+   * 会原样写进 MapData.alignment，前端框架按它决定世界坐标的换算方向。
+   */
+  alignment: number;
 }
 
 export interface MapData {
@@ -79,7 +85,7 @@ export interface MapItem {
   height?: number;
 }
 
-export type EntityType = 'npc' | 'monster' | 'transfer' | 'spawnPoint';
+export type EntityType = 'npc' | 'monster' | 'transfer' | 'spawnPoint' | 'obj' | 'prop' | 'event';
 
 export interface AttributeDef {
   attribute: string;
@@ -96,6 +102,8 @@ export interface UndoAction {
 }
 
 /** Minimal shape of the DOM elements the app binds to. */
-export type ToolName = 'road' | 'brush' | 'npc' | 'monster' | 'transfer' | 'spawnPoint';
-export type ViewName = 'newMap' | 'openMap' | 'setting' | 'miniMap' | 'teach' | 'copyright' | 'sale';
+export type ToolName = 'road' | 'brush' | 'npc' | 'monster' | 'transfer' | 'spawnPoint'
+                      | 'obj' | 'prop' | 'event';
+export type ViewName = 'newMap' | 'openMap' | 'setting' | 'miniMap' | 'teach' | 'copyright'
+                     | 'sale' | 'about' | 'excel';
 export type LayerKey = 'map' | 'road' | 'entity' | 'grid';

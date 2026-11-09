@@ -18,9 +18,9 @@ html, body {
 }
 .hidden { display: none !important; }
 
-/* ---------- EditUI / top bars (Bar height 166, y-up) ---------- */
+/* ---------- EditUI / top bars (Bar height 208, y-up) ---------- */
 #editUI { position: absolute; inset: 0; }
-#bar { position: absolute; left: 0; top: 0; width: 1920px; height: 166px; background: #9b9b9b; }
+#bar { position: absolute; left: 0; top: 0; width: 1920px; height: 208px; background: #9b9b9b; }
 .menu-bar {
   position: absolute; left: 0; top: 0; width: 1920px; height: 40px;
   background: #c7c7c7; display: flex; align-items: center;
@@ -47,6 +47,7 @@ html, body {
 }
 #toolBar1 { top: 42px; }
 #toolBar2 { top: 84px; }
+#toolBar3 { top: 126px; }
 .tb-btn {
   height: 40px; background: #a7a7a7; border: none;
   font-size: 20px; color: #000; text-align: center; line-height: 40px;
@@ -61,7 +62,7 @@ html, body {
 .tb-spacer { flex: 1 1 auto; }
 
 .info-bar {
-  position: absolute; left: 0; top: 126px; width: 1920px; height: 40px;
+  position: absolute; left: 0; top: 168px; width: 1920px; height: 40px;
   background: #c7c7c7; display: flex; align-items: center;
 }
 /* 三段各占 356px（原版 InfoText_* 节点宽），文字左起 28px，标题墨迹与数值墨迹相隔 29px。
@@ -72,9 +73,9 @@ html, body {
 .info-content { font-size: 28px; color: #353434; }
 
 /* ---------- EditContent ---------- */
-#editContent { position: absolute; left: 0; top: 166px; width: 1920px; height: 914px; display: flex; }
-#leftAnchor { width: 149px; height: 914px; background: #4b4b4b; flex: 0 0 149px; }
-#toolPanel { width: 149px; height: 914px; display: flex; flex-direction: column; }
+#editContent { position: absolute; left: 0; top: 208px; width: 1920px; height: 872px; display: flex; }
+#leftAnchor { width: 149px; height: 872px; background: #4b4b4b; flex: 0 0 149px; }
+#toolPanel { width: 149px; height: 872px; display: flex; flex-direction: column; }
 .panel-title {
   height: 60px; line-height: 60px; background: #3f3f3f; color: #e7e6e6;
   font-size: 24px; padding-left: 16px; flex: 0 0 60px;
@@ -95,7 +96,7 @@ html, body {
 .tool-label { color: #fff; font-size: 22px; line-height: 28px; text-align:center; margin-top: 8px; text-shadow: 1px 1px 2px #333; }
 .tool-label small { display:block; font-size: 20px; }
 
-#centerAnchor { flex: 1 1 auto; height: 914px; position: relative; background: #333; }
+#centerAnchor { flex: 1 1 auto; height: 872px; position: relative; background: #333; }
 #editAreaView { position: absolute; inset: 10px 20px 20px 10px; overflow: hidden; background: #222; }
 #mapCanvas { position: absolute; left: 0; top: 0; display: block; }
 #brushCursor { position: absolute; pointer-events: none; border: 1px solid rgba(67,67,67,.56); display: none; }
@@ -104,8 +105,8 @@ html, body {
 #hScrollThumb { position:absolute; top:1px; height:18px; background:#8f8f8f; border:1px solid #777; left:0; width:60px; }
 #vScrollThumb { position:absolute; left:1px; width:18px; background:#8f8f8f; border:1px solid #777; top:0; height:60px; }
 
-#rightAnchor { width: 277px; height: 914px; background: #414141; flex: 0 0 277px; }
-#propertyPanel { width: 277px; height: 914px; display:flex; flex-direction:column; }
+#rightAnchor { width: 277px; height: 872px; background: #414141; flex: 0 0 277px; }
+#propertyPanel { width: 277px; height: 872px; display:flex; flex-direction:column; }
 #propertyPanel .panel-title { background:#969696; color:#e7e6e6; font-size:24px; padding-left:12px; }
 .prop-dot { color:#fcf8a3; margin-left:2px; }
 #propertyName { color:#e7e6e6; }
@@ -160,7 +161,12 @@ html, body {
 .nm-check input { width:28px; height:28px; }
 .nm-detail { font-size:24px; color:#555; margin:0 0 20px 60px; }
 .nm-r4 { margin-left:180px; }
-.nm-path { width:360px; }
+/* 地图原点（v2.0.2 新增行）：标签 + 两个单选一行，说明另起一行。
+ * 不这样写的话，`.nm-check` 继承来的 `margin-left:70px` 会把两个单选挤成两行。 */
+.nm-r3b { flex-wrap:wrap; row-gap:8px; }
+.nm-r3b .nm-check { margin-left:0; white-space:nowrap; }
+.nm-r3b .nm-check span { white-space:nowrap; }
+.nm-align-tip { flex:1 0 100%; font-size:20px; color:#555; }.nm-path { width:360px; }
 .nm-browse, .nm-btn {
   height:40px; min-width:100px; padding:0 14px; font-size:24px; color:#f5f5f5;
   background:#797979; border:1px solid #6a6a6a; cursor:pointer;
@@ -238,8 +244,51 @@ html, body {
   background: rgba(0,0,0,.55); color:#7CFC7C; font: 18px Consolas, monospace;
   border-radius: 3px; pointer-events:none; }
 
+/* ---------- TestView → 寻路设置（原版 SeekPathSetRoot） ---------- */
+.seek-panel {
+  position:absolute; left:12px; top:196px; width:430px; z-index:6;
+  background:#f0f0f0; border:1px solid #8a8a8a; box-shadow:0 3px 12px rgba(0,0,0,.4);
+  padding:10px 14px 14px; font-size:18px; color:#1b1b1b; line-height:1.45;
+}
+.seek-title { font-size:22px; font-weight:bold; margin-bottom:8px; }
+.seek-row { display:flex; align-items:center; gap:8px; margin:6px 0; }
+.seek-label { flex:0 0 218px; }
+.seek-input { width:110px; height:28px; font-size:18px; padding:0 6px; border:1px solid #999; background:#fff; }
+.seek-check { display:flex; align-items:center; gap:8px; margin:6px 0; cursor:pointer; }
+.seek-check input { width:18px; height:18px; flex:0 0 18px; }
+.seek-note { font-size:15px; color:#7a4a00; margin:0 0 4px 26px; }
+.seek-group { margin-top:12px; padding-top:10px; border-top:1px solid #c9c9c9; }
+.seek-group-title { font-size:19px; font-weight:bold; }
+.seek-group-desc { font-size:16px; color:#555; margin:2px 0 6px; }
+.seek-radio { display:flex; align-items:center; gap:8px; margin:5px 0; cursor:pointer; }
+.seek-radio input { width:17px; height:17px; flex:0 0 17px; }
+.seek-off { color:#8a8a8a; cursor:not-allowed; }
+
 /* ---------- alert / toast / file input ---------- */
 #alertBox { position:absolute; z-index:100; left:50%; top:50%; transform:translate(-50%,-50%); width:460px; padding:26px; background:#e8e8e8; border:2px solid #888; box-shadow:0 8px 30px rgba(0,0,0,.5); text-align:center; pointer-events:auto; }
 #alertMsg { font-size:24px; color:#222; margin-bottom:22px; line-height:1.5; }
 #alertOk { font-size:22px; padding:6px 30px; cursor:pointer; }
 #toast { position:absolute; z-index:110; left:50%; bottom:40px; transform:translateX(-50%); background:rgba(20,20,20,.85); color:#fff; font-size:22px; padding:10px 26px; border-radius:4px; pointer-events:none; }
+
+/* ---------- AboutView (帮助 → 关于在线地图编辑器) ---------- */
+#aboutView { width: 1080px; height: 720px; left: 420px; top: 120px; }
+.about-content { padding: 20px 34px; font-size: 22px; color: #1b1b1b; line-height: 1.6; overflow: auto; }
+.about-row { margin-bottom: 6px; }
+.about-sub { margin: 18px 0 8px; font-size: 24px; font-weight: bold; }
+.about-list { margin: 0; padding-left: 34px; }
+.about-list li { margin-bottom: 12px; }
+.about-note { margin-top: 18px; color: #555; font-size: 19px; }
+
+/* ---------- ExcelExportView (工具 → Excel导出数据工具) ---------- */
+#excelView { width: 1180px; height: 760px; left: 370px; top: 110px; }
+.excel-content { padding: 16px 26px; display: flex; flex-direction: column; gap: 12px; height: 690px; box-sizing: border-box; }
+.excel-help { font-size: 20px; color: #2a2a2a; line-height: 1.5; }
+.excel-toolbar, .excel-sheet-row { display: flex; align-items: center; gap: 12px; font-size: 20px; }
+.excel-btn { font-size: 20px; padding: 6px 18px; cursor: pointer; }
+.excel-status { color: #444; font-size: 19px; }
+.excel-select { font-size: 19px; padding: 4px 8px; min-width: 120px; }
+.excel-preview { flex: 1 1 auto; overflow: auto; border: 1px solid #9a9a9a; background: #fff; }
+.excel-preview table { border-collapse: collapse; font-size: 17px; }
+.excel-preview td, .excel-preview th { border: 1px solid #d0d0d0; padding: 3px 10px; white-space: nowrap; }
+.excel-preview th { background: #ececec; position: sticky; top: 0; }
+.excel-empty { padding: 20px; color: #777; font-size: 19px; }

@@ -32,19 +32,25 @@ html.wm-booted #app { visibility: visible; }
         <div class="menu-item" data-menu="file">文件</div>
         <div class="menu-item" data-menu="edit">编辑</div>
         <div class="menu-item" data-menu="command">命令</div>
+        <div class="menu-item" data-menu="download">下载</div>
         <div class="menu-item" data-menu="window">窗口</div>
+        <div class="menu-item" data-menu="tools">工具</div>
         <div class="menu-item" data-menu="help">帮助</div>
         <div id="menuPanel" class="menu-panel"></div>
       </div>
       <!-- ToolBar 1 -->
       <div id="toolBar1" class="tool-bar"></div>
-      <!-- ToolBar 2 -->
+      <!-- ToolBar 2 (layer / view switches) -->
       <div id="toolBar2" class="tool-bar"></div>
+      <!-- ToolBar 3 (left-panel tabs) -->
+      <div id="toolBar3" class="tool-bar"></div>
       <!-- InfoBar -->
       <div id="infoBar" class="info-bar">
+        <div class="info-text"><span class="info-title">地图原点</span><span class="info-content" id="infoAlign">基于左下角</span></div>
         <div class="info-text"><span class="info-title">像素坐标</span><span class="info-content" id="infoPixel">（0,0）</span></div>
         <div class="info-text"><span class="info-title">网格坐标</span><span class="info-content" id="infoGrid">（0,0）</span></div>
         <div class="info-text"><span class="info-title">世界坐标</span><span class="info-content" id="infoWorld">（0,0）</span></div>
+        <div class="info-text"><span class="info-title">路点值</span><span class="info-content" id="infoRoadValue">（0）</span></div>
       </div>
     </div>
 
@@ -86,6 +92,39 @@ html.wm-booted #app { visibility: visible; }
       <div class="info-text"><span class="info-title">世界坐标</span><span class="info-content" id="testInfoWorld">（0,0）</span></div>
     </div>
     <div id="testStage"><canvas id="testCanvas"></canvas></div>
+    <!-- v2.0.2 TestView → SeekPathSetRoot（寻路设置） -->
+    <div id="seekPanel" class="seek-panel">
+      <div class="seek-title">寻路设置</div>
+      <div class="seek-row">
+        <span class="seek-label">设置最大寻路搜索步数</span>
+        <input class="seek-input" id="seekMaxStep" value="1000">
+      </div>
+      <div class="seek-row">
+        <span class="seek-label">测试寻路过程帧率（秒）</span>
+        <input class="seek-input" id="seekTpr" value="0.1">
+      </div>
+      <label class="seek-check"><input type="checkbox" id="seekNavLine" checked><span>显示寻路导航线</span></label>
+      <label class="seek-check seek-off" title="路点墙角来自 RCA 的拐角数据，本版只有 A*，因此不可用">
+        <input type="checkbox" id="seekRoadCorner" disabled><span>显示路点墙角</span>
+      </label>
+      <div class="seek-note">只对4边型格子有效（需要 RCA，本版未实现）</div>
+      <div class="seek-group">
+        <div class="seek-group-title">使用寻路算法类型设置</div>
+        <div class="seek-group-desc">备注：RCA寻路不支持六边形格子</div>
+        <label class="seek-radio"><input type="radio" name="seekType" value="0" checked><span>A* 寻路 （最通用的算法）</span></label>
+        <label class="seek-radio seek-off" title="本版只实现了 A* 寻路">
+          <input type="radio" name="seekType" value="1" disabled><span>RCA 寻路 （寻路速度最快的算法）</span>
+        </label>
+        <div class="seek-note">本版未实现</div>
+      </div>
+      <div class="seek-group">
+        <div class="seek-group-title">寻路路径优化等级设置</div>
+        <div class="seek-group-desc">备注：RCA寻路只有最佳优化一种情况</div>
+        <label class="seek-radio"><input type="radio" name="seekOptimize" value="0"><span>不优化  （打开寻路导航线可看效果）</span></label>
+        <label class="seek-radio"><input type="radio" name="seekOptimize" value="1"><span>一般优化 （打开寻路导航线可看效果）</span></label>
+        <label class="seek-radio"><input type="radio" name="seekOptimize" value="2" checked><span>最佳优化 （打开寻路导航线可看效果）</span></label>
+      </div>
+    </div>
     <div id="testFps">FPS 60</div>
   </div>
 
@@ -112,6 +151,12 @@ html.wm-booted #app { visibility: visible; }
           <label class="nm-check"><input type="checkbox" id="nmRegular"><span>正六边形</span></label>
         </div>
         <div id="nmDetail" class="nm-detail hidden">备注：六边形路点的宽指的是两个对角之间的距离，高指的是两个对边的距离</div>
+        <div class="nm-row nm-r3b">
+          <span class="nm-label">地图原点</span>
+          <label class="nm-check"><input type="radio" name="nmAlign" id="nmAlignBL" value="0" checked><span>基于左下角</span></label>
+          <label class="nm-check"><input type="radio" name="nmAlign" id="nmAlignTL" value="1"><span>基于左上角</span></label>
+          <span class="nm-align-tip">Laya / 部分电脑端引擎以左上角为原点，这类引擎请选「基于左上角」</span>
+        </div>
         <div class="nm-row nm-r4">
           <span class="nm-label">选择底图</span><input class="nm-input nm-path" id="nmBgPath" readonly>
           <button class="nm-browse" id="nmBrowseBtn">浏览</button>
@@ -197,6 +242,52 @@ html.wm-booted #app { visibility: visible; }
 13、系统封装有自定义鼠标样式，做页游可能会用到，通过接口可以自由切换样式</div>
         <div class="sale-q">怎么获取这个框架？<br>框架还不免费，可联系作者购买<br>联系方式&nbsp; QQ：583051842</div>
         <div class="sale-btn">体验项目</div>
+      </div>
+    </div>
+
+    <!-- AboutView —— 帮助 → 关于在线地图编辑器（v2.0.2 更新内容，原文照抄） -->
+    <div id="aboutView" class="view hidden" data-view="about">
+      <div class="view-title"><span class="view-title-txt">关于地图编辑器</span><span class="view-close" data-close="about">关闭</span></div>
+      <div class="view-content about-content">
+        <div class="about-row"><b>应用名称：</b>EasyMapEditor</div>
+        <div class="about-row"><b>版本：</b>v2.0.2</div>
+        <div class="about-sub">更新内容</div>
+        <ol class="about-list">
+          <li>新增了基于左上角为原点坐标的编辑模式，应对一些以左上角为原点的游戏引擎电脑地图编辑需求，在新建界面有是基于左下角还是左上角为原点编辑的选项。</li>
+          <li>新增了Laya_v3.8.8的地图前端框架，Laya开发者可在编辑器的下载菜单获取对应的Laya版本。因为Laya引擎的坐标是基于左上角为原点的，所以新建地图时需要勾选以「以左上角为原点」的选项，使用地图切片工具时，也需要勾选基于左上角切图。</li>
+          <li>编辑路点时，按shift拖放路点，可以切换大笔刷，释放按键时恢复原来大小的笔刷，借助这个快捷键可快速编辑地图。</li>
+          <li>为了迎合一些用户使用photoshop的习惯，拖动地图底图除了使用「鼠标中键」外，还可以使用「space + 鼠标左键」拖动底图。</li>
+          <li>新增Excel转数据工具，转的数据包含json，xml，代码脚本，方便游戏团队开发协作开发。游戏前端框架excel的demo数据就是用这个工具导的数据，如何使用，工具界面上有教程。</li>
+        </ol>
+        <div class="about-note">本项目为浏览器端的独立重写实现，交互与数据格式对齐 EasyMapEditor v2.0.2。</div>
+      </div>
+    </div>
+
+    <!-- ExcelExportView —— 工具 → Excel导出数据工具 -->
+    <div id="excelView" class="view hidden" data-view="excel">
+      <div class="view-title"><span class="view-title-txt">Excel导出数据工具</span><span class="view-close" data-close="excel">关闭</span></div>
+      <div class="view-content excel-content">
+        <div class="excel-help">
+          第一行是描述，第二行是字段名，第三行是字段类型（最少 3 行）。<br>
+          支持 <code>.xlsx</code> / <code>.csv</code> / <code>.tsv</code>，也可以直接粘贴表格。
+        </div>
+        <div class="excel-toolbar">
+          <button id="excelPick" class="excel-btn">选择文件</button>
+          <input type="file" id="excelFile" accept=".xlsx,.csv,.tsv,.txt" hidden>
+          <button id="excelDemo" class="excel-btn">载入示例</button>
+          <span id="excelStatus" class="excel-status">还没选择Excel文件</span>
+        </div>
+        <div class="excel-sheet-row">
+          <span>表单：</span><select id="excelSheet" class="excel-select"></select>
+          <span>导出类型：</span>
+          <select id="excelType" class="excel-select">
+            <option value="json">json</option>
+            <option value="xml">xml</option>
+            <option value="ts">TypeScript 接口 + 数据</option>
+          </select>
+          <button id="excelExport" class="excel-btn">导出</button>
+        </div>
+        <div id="excelPreview" class="excel-preview"></div>
       </div>
     </div>
   </div>

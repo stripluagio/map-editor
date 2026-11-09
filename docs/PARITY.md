@@ -300,7 +300,7 @@ var c = mapType == MapType.angle45 ? 2 * i : i;   // i = MapRoadUtils.row
   再导出会变成 `{type,objId,objName,objType,skin,x,y,cx,cy,params,width,height}` ——
   `x/y/width/height` 一个不丢，只是多了基类字段。这是**唯一**一处整串字节不相等的情况，
   而且原版本来就会把这种实体丢掉，所以不影响互通。
-  克隆自己不会产生 `item`（新建只有 npc / monster / transfer / spawnPoint 四种）。
+  克隆自己不会产生 `item`（新建只有 npc / monster / transfer / spawnPoint / obj / prop / event 七种）。
 
 ### 3.7 面向交互的测试钩子
 
@@ -311,3 +311,84 @@ var c = mapType == MapType.angle45 ? 2 * i : i;   // i = MapRoadUtils.row
 | `WMPaintAtPixel(px, py, value)` | 走真实笔刷路径涂一格（含边界检查） |
 | `WMAddEntity(obj)` | 追加一个经 `normalizeEntity` 规范化的实体 |
 | `WMLoadData(json)` | 和「文件 → 打开」走**同一个** `paramsFromMapData()`，返回导出结果 |
+
+---
+
+## 四、对齐线上 v2.0.2（`/v2.0.0/web-mobile/` 实际是 2.0.2）
+
+线上那份构建的 `index.html` 标题写的是 `EasyMapEditor_v2_0_2`，关于对话框也写 `版本：v2.0.2`，
+虽然 URL 路径还是 `/v2.0.0/`。下面这些是照它补齐的。
+
+### 4.1 顶部与菜单
+
+| 项 | 线上 v2.0.2 | 本项目 |
+| --- | --- | --- |
+| 菜单 | 文件 / 编辑 / 命令 / 下载 / 窗口 / 工具 / 帮助 | 同 |
+| 工具条1 可见按钮 | 13 个（新建…更多游戏项目） | 同 |
+| 工具条2 | 7 个图层/视图开关 | 同 |
+| 工具条3 | 左侧 9 个标签页 | 同 |
+| 信息条 | 地图原点 / 像素 / 网格 / 世界 / 路点值 | 同 |
+
+`下载` 里的框架包地址是从线上 bundle 的 `fun` 里原样抄的（`DOWNLOAD_LINKS`）。
+
+### 4.2 三种新放置类型
+
+线上把可放置类型从 4 种扩到 7 种：多了 `obj`（物体）/ `prop`（道具）/ `event`（事件），
+对应 `EditorObjElement` / `EditorPropElement` / `EditorEventObjElement`。
+
+- `EditorObjElement` 与 `EditorEventObjElement` 在原版里就是 `baseAttributes.concat([])`，
+  一个字段都不加 —— 靠 `objName` / `assetsPath` 区分具体资源。
+- `EditorPropElement` 多三个字段：`isTreasure` / `itemId` / `itemNum`。
+- 原版的可选资源来自用户导入的 `MapEditorAssets` 目录；本项目还没有资源导入流程，
+  于是给这三类各配了几张内置占位图（内联 SVG，不占仓库体积），保证工具立刻可用。
+  这是**有意的差异**：皮肤不是原版素材，但字段结构是原版的。
+
+### 4.3 地图原点（`alignment`）
+
+原版 v2.0.2 在新建地图时让用户选「基于左下角 / 基于左上角」，并把这个值写进
+`MapData.alignment`（0 / 1），由前端框架决定世界坐标换算方向 —— 编辑器自己不做换算。
+
+- 导出：`buildMapData()` 写 `d.alignment = params.alignment || 0`，`offsetX/offsetY` 仍为 0
+  （原版也从不给它们赋值）。
+- 打开：`paramsFromMapData()` 会把 `alignment` 原样带回来，否则「左上角」的地图会被
+  当成「左下角」重新导出。
+- 新建对话框默认沿用当前地图的原点模式（原版每次回到左下角）。这是**有意的差异**，
+  理由见 `views.ts` 里的注释：记住比悄悄重置安全。
+
+### 4.4 Excel 导出数据工具
+
+线上 `工具 → Excel导出数据工具` 走的是内置的 `XLSX`(SheetJS) + `JSZip`。
+本项目不引这两个依赖：
+
+- `.xlsx` 用 `DecompressionStream('deflate-raw')` 解压，自己解析 ZIP 中央目录；
+- `sharedStrings.xml` / `sheet1.xml` 用 `DOMParser` 读；
+- `.csv` / `.tsv` 走纯文本分隔符解析。
+
+导出三种格式：JSON（数组对象）、XML（`<root><item>…`）、TypeScript（接口 + 常量数组）。
+字段类型从表头第三行读（`string` / `int` / `number` / `bool` / `any`）。
+
+### 4.5 寻路设置面板（`SeekPathSetRoot`）
+
+线上测试视图左侧有一块面板，本项目按同样的分组、同样的文案补齐：
+
+| 控件 | 线上默认 | 本项目 | 是否生效 |
+| --- | --- | --- | --- |
+| 设置最大寻路搜索步数 | 1000 | 1000 | ✅ 传给 A\* 的步数上限；填 0 回到 1000 |
+| 测试寻路过程帧率（秒） | 0.1 | 0.1 | ✅ F4 每次扩展的间隔；`clamp(0.1, 1)` |
+| 显示寻路导航线 | 开 | 开 | ✅ 关掉后不再画 `#2b2b2b` 折线 |
+| 显示路点墙角 | 关 | 关 | ❌ 见下 |
+| 使用寻路算法类型 | A\* | A\* | RCA 项保留但禁用 |
+| 寻路路径优化等级 | 最佳优化 | 最佳优化 | ✅ 0/1/2 真的改变路径点数 |
+
+**没实现的两项**，理由写在这里而不是藏起来：
+
+- **RCA 寻路**：原版是预烘焙拐角图 + 矩形对称性剪枝的另一套算法。本版只有 A\*，
+  所以 `RCA 寻路` 单选保留在界面上但 `disabled`，旁边标注「本版未实现」。
+- **显示路点墙角**：原版这个开关画的是 RCA 预烘焙出来的拐角数据
+  （`RCAStarRoadSeeker.showAllCorner`），而且只对 45°/90° 有效。
+  没有 RCA 就没有这份数据，所以同样禁用，并保留原版自己的备注
+  「只对4边型格子有效」。
+
+优化等级的实现：`optimizePath(road, path, isPass, level)` 里
+`level 0` 直接返回原始路径、`level 1` 只做共线合并、`level 2` 再做视线捷径。
+e2e 里有一条断言直接比对三个等级下的路径点数，确保这个开关不是摆设。

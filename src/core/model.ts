@@ -12,6 +12,7 @@ export class MapParamsModel implements MapParams {
   bgName: string;
   bgImage: HTMLImageElement | null;
   bgSrc: string | null;
+  alignment: number;
 
   constructor(o: Partial<MapParams> = {}) {
     this.name = o.name ?? '未命名';
@@ -23,6 +24,7 @@ export class MapParamsModel implements MapParams {
     this.bgName = o.bgName || 'map_bg';
     this.bgImage = o.bgImage ?? null;
     this.bgSrc = o.bgSrc ?? null;
+    this.alignment = o.alignment ?? 0;
   }
 }
 
@@ -61,6 +63,11 @@ export class MapDataModel implements MapData {
 }
 
 /** Create an entity with all classDic attributes at their original defaults. */
+const DEFAULT_OBJ_NAME: Record<string, string> = {
+  npc: 'NPC', monster: '怪物', transfer: '传送门', spawnPoint: '出生点',
+  obj: '物体', prop: '道具', event: '事件',
+};
+
 export function defaultEntity(type: EntityType | 'item', x: number, y: number): MapItem {
   const cls = TYPE_TO_CLASS[type] || 'EditorElement';
   const e: MapItem = { type: type || 'item', className: cls };
@@ -70,8 +77,7 @@ export function defaultEntity(type: EntityType | 'item', x: number, y: number): 
     else e[a.attribute] = '';
   }
   e.objId = '0'; e.objType = '0';
-  e.objName = type === 'npc' ? 'NPC' : type === 'monster' ? '怪物'
-            : type === 'transfer' ? '传送门' : type === 'spawnPoint' ? '出生点' : 'item';
+  e.objName = DEFAULT_OBJ_NAME[type] || 'item';
   e.skin = '0';
   e.x = Math.round((x || 0) * 1000) / 1000;
   e.y = Math.round((y || 0) * 1000) / 1000;
@@ -95,7 +101,9 @@ export function buildMapData(params: MapParams, road: number[][], entities: MapI
   d.name = params.name; d.bgName = params.bgName; d.type = params.mapType;
   d.mapWidth = params.mapWidth; d.mapHeight = params.mapHeight;
   d.nodeWidth = params.ceilWidth; d.nodeHeight = params.ceilHeight;
-  d.alignment = 0; d.offsetX = 0; d.offsetY = 0;
+  // v2.0.2 exports the origin mode: 0 = 左下角, 1 = 左上角. `offsetX/offsetY`
+  // stay 0 because the original never assigns them either.
+  d.alignment = params.alignment || 0; d.offsetX = 0; d.offsetY = 0;
   d.roadDataArr = road.map(r => r.slice());
   // Original `unitDataConversion` reads `entityLayer.getMapUnits()`, and
   // `setDepthRand()` keeps that array sorted by y descending, so the exported

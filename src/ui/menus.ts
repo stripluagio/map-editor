@@ -28,6 +28,8 @@ export function buildMenus(onAction: ActionHandler): void {
 /** 菜单面板每次打开都重建，所以这类开关可以直接把当前状态写进标题。 */
 function liveLabel(act: string, fallback: string): string {
   if (act === 'toggleAuxLine') return (state.showAuxLine ? '隐藏辅助线' : '显示辅助线') + '（J）';
+  if (act === 'showAnchor') return (state.showAnchor ? '隐藏' : '显示') + '锚点(Y)';
+  if (act === 'showEntityTitle') return (state.showEntityTitle ? '隐藏' : '显示') + '物体标题';
   return fallback;
 }
 

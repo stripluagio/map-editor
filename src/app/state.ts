@@ -34,6 +34,25 @@ export interface SeekState {
   /** Player has been sent along `path`. */
   started: boolean;
 }
+/**
+ * v2.0.2 `SeekPathSetPanel` —— 测试视图里的「寻路设置」。
+ * 默认值和线上运行时读出来的一致：maxStep 1000、tpr 0.1 秒、
+ * 显示寻路导航线 = 开、显示路点墙角 = 关、A* 寻路、最佳优化。
+ */
+export interface SeekSettings {
+  /** 设置最大寻路搜索步数（AStarRoadSeeker.maxStep）。 */
+  maxStep: number;
+  /** 测试寻路过程帧率（秒）—— F4 每次扩展的间隔。 */
+  tpr: number;
+  /** 显示寻路导航线：找到路径后那条黑色折线。 */
+  navLine: boolean;
+  /** 显示路点墙角：只在 4 边型格子上有意义。 */
+  roadCorner: boolean;
+  /** 寻路路径优化等级：0 不优化 / 1 一般优化 / 2 最佳优化。 */
+  optimize: 0 | 1 | 2;
+  /** RCA 寻路（线上默认关；本版只有 A*，开关保留但不可用）。 */
+  useRCA: boolean;
+}
 export interface TestState {
   player: Player;
   path: Point[];
@@ -89,6 +108,16 @@ export class AppState {
   entitySkin = 0;
   editRoadModel = false;
   showAnchor = false;
+  /** v2.0.2 toolBar2 「隐藏物体标题」—— 关闭时只画图标不画名字。 */
+  showEntityTitle = true;
+  /**
+   * 按住 Shift 时临时切到大笔刷（原版 `EditBrush.onShiftKeyDown` → `itemList[2]`）。
+   * `shiftBrushPrev` 记住按下前的档位，松键还原 —— 原版的 `lastItem`。
+   */
+  shiftBrush = false;
+  shiftBrushPrev = 0;
+  /** 导入编辑资源时扫到的图片文件名（预设规则导入尚未实现，见 app/io.ts）。 */
+  importedAssets: string[] = [];
   /**
    * 原版 `GridLayer._isShowAuxiliaryLine` 默认是 `true`；本项目**故意默认关闭**，
    * 因为那两族矩形辅助线是原版给「画路点时对格子用的参考线」，默认铺满屏很吵。
@@ -135,6 +164,10 @@ export class AppState {
   // play mode
   test: TestState | null = null;
   testLoop: number | null = null;
+  /** 测试视图 → 寻路设置（v2.0.2 SeekPathSetPanel）。跨次进入测试保留。 */
+  seekSettings: SeekSettings = {
+    maxStep: 1000, tpr: 0.1, navLine: true, roadCorner: false, optimize: 2, useRCA: false,
+  };
 
   /** Is the given road value passable? */
   pass(v: number): boolean {

@@ -14,6 +14,7 @@
     BRUSH_SIZES: () => BRUSH_SIZES,
     BinaryHeap: () => BinaryHeap,
     CLASS_DIC: () => CLASS_DIC,
+    DOWNLOAD_LINKS: () => DOWNLOAD_LINKS,
     ENTITY_SKINS: () => ENTITY_SKINS,
     ENTITY_TYPES: () => ENTITY_TYPES,
     GRID_BORDER: () => GRID_BORDER,
@@ -32,9 +33,11 @@
     PLAYER_STATE_FRAMES: () => PLAYER_STATE_FRAMES,
     ROAD_KEYS: () => ROAD_KEYS,
     ROAD_SWATCHES: () => ROAD_SWATCHES,
+    SHIFT_BRUSH_SIZE: () => SHIFT_BRUSH_SIZE,
     TEST_TOOLBAR: () => TEST_TOOLBAR,
     TOOLBAR1: () => TOOLBAR1,
     TOOLBAR2: () => TOOLBAR2,
+    TOOLBAR3: () => TOOLBAR3,
     TOOL_TITLES: () => TOOL_TITLES,
     TOOL_TO_ACTION: () => TOOL_TO_ACTION,
     TYPE_LABEL: () => TYPE_LABEL,
@@ -99,7 +102,20 @@
     { value: 2, label: "遮挡路点(E)", color: "#0000ff" },
     { value: 3, label: "隐藏路点(R)", color: "#ffff00" }
   ];
-  var BRUSH_SIZES = [0, 1, 2, 3, 4, 5];
+  var BRUSH_SIZES = [0, 1, 2, 3, 4];
+  var SHIFT_BRUSH_SIZE = 2;
+  function svgIcon(body) {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">' + body + "</svg>";
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  }
+  var BOX = '<rect x="8" y="18" width="48" height="38" rx="4" fill="#c8873c" stroke="#5c3a12" stroke-width="3"/><path d="M8 32h48" stroke="#5c3a12" stroke-width="3"/><rect x="27" y="26" width="10" height="12" fill="#f0c060" stroke="#5c3a12" stroke-width="2"/>';
+  var BARREL = '<ellipse cx="32" cy="20" rx="18" ry="7" fill="#b9762f" stroke="#4d2d0a" stroke-width="3"/><path d="M14 20v26c0 4 8 7 18 7s18-3 18-7V20" fill="#c8873c" stroke="#4d2d0a" stroke-width="3"/><path d="M14 30c6 3 30 3 36 0M14 40c6 3 30 3 36 0" stroke="#7a4a15" stroke-width="2" fill="none"/>';
+  var STONE = '<path d="M22 58V20c0-6 4-10 10-10s10 4 10 10v38z" fill="#9aa0a6" stroke="#3d4247" stroke-width="3"/><path d="M26 30h12M26 38h12M26 46h12" stroke="#3d4247" stroke-width="2"/>';
+  var COIN = '<circle cx="32" cy="32" r="22" fill="#f2c53d" stroke="#8a6a10" stroke-width="3"/><circle cx="32" cy="32" r="13" fill="none" stroke="#8a6a10" stroke-width="2"/>';
+  var POTION = '<path d="M25 12h14v8l6 10v20a8 8 0 0 1-8 8H27a8 8 0 0 1-8-8V30l6-10z" fill="#7fd0f0" stroke="#14425c" stroke-width="3"/><path d="M22 40h20v10a6 6 0 0 1-6 6h-8a6 6 0 0 1-6-6z" fill="#e2564a"/>';
+  var KEY = '<circle cx="18" cy="32" r="11" fill="none" stroke="#d8a520" stroke-width="6"/><path d="M28 32h28M46 32v10M54 32v8" stroke="#d8a520" stroke-width="6" fill="none"/>';
+  var FLAG = '<path d="M18 58V8" stroke="#4a4a4a" stroke-width="5"/><path d="M18 10h30l-6 10 6 10H18z" fill="#e2564a" stroke="#7a1f1a" stroke-width="3"/>';
+  var ZONE = '<rect x="6" y="14" width="52" height="36" rx="4" fill="none" stroke="#4aa3e2" stroke-width="4" stroke-dasharray="8 6"/><path d="M6 14 58 50M58 14 6 50" stroke="#4aa3e2" stroke-width="2" opacity=".55"/>';
   var ENTITY_SKINS = {
     npc: [
       { label: "商人.NPC", icon: "assets/skins/npc_1_shangren.png", objName: "商人.NPC", w: 56, h: 99 },
@@ -163,6 +179,25 @@
     ],
     spawnPoint: [
       { label: "出生点", icon: "assets/skins/spawn_1.png", objName: "出生点", w: 134, h: 207 }
+    ],
+    // ---- v2.0.2 新增的三种放置类型 -------------------------------------------
+    // 原版把这三类的可选资源放在用户导入的 `MapEditorAssets` 里（`EditAssets` +
+    // `ImportCustomAssetsView`），没导入时面板是空的（"没有该类型的编辑数据"）。
+    // 我们还没有资源导入流程，所以给每个类型一个内置占位图，保证工具立刻可用；
+    // 图标用内联 SVG，不额外占仓库体积。
+    obj: [
+      { label: "宝箱物件", icon: svgIcon(BOX), objName: "宝箱物件", w: 72, h: 72 },
+      { label: "木桶物件", icon: svgIcon(BARREL), objName: "木桶物件", w: 64, h: 76 },
+      { label: "石碑物件", icon: svgIcon(STONE), objName: "石碑物件", w: 64, h: 84 }
+    ],
+    prop: [
+      { label: "金币", icon: svgIcon(COIN), objName: "金币", w: 44, h: 44 },
+      { label: "药水", icon: svgIcon(POTION), objName: "药水", w: 44, h: 60 },
+      { label: "钥匙", icon: svgIcon(KEY), objName: "钥匙", w: 56, h: 40 }
+    ],
+    event: [
+      { label: "剧情事件", icon: svgIcon(FLAG), objName: "剧情事件", w: 56, h: 80 },
+      { label: "触发区域", icon: svgIcon(ZONE), objName: "触发区域", w: 96, h: 64 }
     ]
   };
   var TOOL_TITLES = {
@@ -171,7 +206,10 @@
     npc: "放置NPC",
     monster: "放置怪物",
     transfer: "放置传送门",
-    spawnPoint: "放置出生点"
+    spawnPoint: "放置出生点",
+    obj: "放置物体",
+    prop: "放置道具",
+    event: "放置事件"
   };
   var TOOL_TO_ACTION = {
     road: "openRoadWin",
@@ -179,13 +217,18 @@
     npc: "openNpcWin",
     monster: "openMonsterWin",
     transfer: "openTransferWin",
-    spawnPoint: "openSpawnWin"
+    spawnPoint: "openSpawnWin",
+    obj: "openObjWin",
+    prop: "openPropWin",
+    event: "openEventWin"
   };
   var TOOLBAR1 = [
     { label: "新建", w: 100, act: "createNewFile" },
     { label: "打开", w: 100, act: "openFile" },
     { label: "保存", w: 100, act: "saveFile" },
-    { label: "设置", w: 100, act: "showProjectSetting" },
+    { label: "另存为", w: 110, act: "saveAsFile" },
+    { label: "设置", w: 90, act: "showProjectSetting" },
+    { label: "导入编辑资源", w: 150, act: "importEditAssets" },
     { label: "运行（ctr + enter）", w: 180, act: "testProject" },
     { label: "添加可走路点(Q)", w: 180, act: "addEnableNode", hidden: true },
     { label: "添加不可走路点(W)", w: 180, act: "addDisableNode", hidden: true },
@@ -193,23 +236,34 @@
     { label: "添加传送路点(R)", w: 180, act: "addTransferNode", hidden: true },
     { label: "删除路点(D或右键)", w: 180, act: "deleteNode", hidden: true },
     { label: "停止放置路点（T）", w: 180, act: "notDrawNode", hidden: true },
-    { label: "显示小地图(F2)", w: 180, act: "showMiniMap" },
+    { label: "显示小地图(F2)", w: 170, act: "showMiniMap" },
+    { label: "Excel导出数据工具", w: 200, act: "openExcelExportTool" },
     { label: "下载前端框架", w: 150, act: "downloadSource", hidden: true },
     { label: "下载大地图切图工具", w: 240, act: "downloadImageClipTool", hidden: true },
-    { label: "教程", w: 120, act: "showTeach" },
-    { label: "帮助", w: 120, act: "showCopyright" }
+    { label: "教程", w: 90, act: "showTeach" },
+    { label: "地图介绍", w: 120, act: "showIntroduce" },
+    { label: "购买地图编辑器", w: 160, act: "openSaleMapEditor" },
+    { label: "更多游戏项目", w: 150, act: "gotoMoreGame" }
   ];
   var TOOLBAR2 = [
     { label: "隐藏地图（U）", w: 180, act: "showMapLayer", key: "U" },
     { label: "隐藏路点(I)", w: 180, act: "showRoadLayer", key: "I" },
     { label: "隐藏物体(O)", w: 180, act: "showEntityLayer", key: "O" },
     { label: "隐藏网格(P)", w: 180, act: "showGridLayer", key: "P" },
+    { label: "隐藏物体锚点(Y)", w: 200, act: "showAnchor" },
+    { label: "隐藏物体标题", w: 180, act: "showEntityTitle" },
+    { label: "路点编辑模式", w: 180, act: "setEditRoadModel" }
+  ];
+  var TOOLBAR3 = [
     { label: "设置笔刷", w: 110, act: "openBrushWin" },
     { label: "编辑路点", w: 110, act: "openRoadWin" },
     { label: "放置npc", w: 110, act: "openNpcWin" },
     { label: "放置怪物", w: 110, act: "openMonsterWin" },
     { label: "放置传送门", w: 130, act: "openTransferWin" },
-    { label: "放置出生点", w: 130, act: "openSpawnWin" }
+    { label: "放置出生点", w: 130, act: "openSpawnWin" },
+    { label: "放置物体", w: 110, act: "openObjWin" },
+    { label: "放置道具", w: 110, act: "openPropWin" },
+    { label: "放置事件", w: 110, act: "openEventWin" }
   ];
   var TEST_TOOLBAR = [
     { label: "隐藏地图(U)", w: 180, act: "t_showMapLayer" },
@@ -224,6 +278,7 @@
       ["新建", "createNewFile"],
       ["打开（CTRL + O）", "openFile"],
       ["保存（CTRL + S）", "saveFile"],
+      ["另存为（Shift + S）", "saveAsFile"],
       ["sep", ""],
       ["设置", "showProjectSetting"]
     ],
@@ -245,7 +300,7 @@
       ["显示隐藏网格(P)", "showGridLayer"],
       ["显示隐藏辅助线（J）", "toggleAuxLine"],
       ["sep", ""],
-      ["显示地图物体锚点(k)", "showAnchor"],
+      ["显示隐藏锚点(Y)", "showAnchor"],
       ["sep", ""],
       ["剪切(CTRL + X)", "cut"],
       ["复制(CTRL + C)", "copy"],
@@ -256,12 +311,37 @@
       ["地图切片导出（ctrl + W）", "exportTiles"],
       ["地图缩小导出（ctrl + T）", "exportSmall"]
     ],
+    download: [
+      ["基础前端框架Creator_v2.4.15（免费）", "dl_creator_base_2"],
+      ["基础前端框架Creator_v3.8.6（免费）", "dl_creator_base_3"],
+      ["高级前端框架Creator_v2.4.15（付费）", "dl_creator_pro_2"],
+      ["高级前端框架Creator_v3.8.6（付费）", "dl_creator_pro_3"],
+      ["基础前端框架Laya_v3.3.8（免费）", "dl_laya_base_3"],
+      ["高级前端框架Laya_v3.3.8（付费）", "dl_laya_pro_3"],
+      ["基础前端框架Unity_v2022.3.13（免费）", "dl_unity_base"],
+      ["sep", ""],
+      ["下载大地图切图工具", "downloadImageClipTool"]
+    ],
     window: [
       ["小地图预览面板(F2)", "showMiniMap"],
       ["路点编辑模式(N)", "setEditRoadModel"],
       ["普通编辑模式(M)", "setNormalRoadModel"]
     ],
-    help: [["联系我们", "showCopyright"]]
+    tools: [
+      ["Excel导出数据工具", "openExcelExportTool"],
+      ["下载大地图切图工具", "downloadImageClipTool"]
+    ],
+    help: [
+      ["关于在线地图编辑器", "showAbout"],
+      ["联系我们", "showCopyright"]
+    ]
+  };
+  var DOWNLOAD_LINKS = {
+    dl_creator_base_2: "https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/framework/cocos/RPGFramework_base_2.4.15.zip",
+    dl_creator_base_3: "https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/framework/cocos/RPGFramework_base_3.8.6.zip",
+    dl_laya_base_3: "https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/framework/laya/RPGFramework_Base_Laya_3.3.8.zip",
+    dl_unity_base: "https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/framework/unity/RPGMapFramework_2022.3.13.zip",
+    downloadImageClipTool: "https://easymapeditor-1258223435.cos.ap-guangzhou.myqcloud.com/tool/ImageClip.zip"
   };
   var ROAD_KEYS = { q: 0, w: 1, e: 2, r: 3, d: -1, t: -2 };
   var VIEW_IDS = {
@@ -271,14 +351,19 @@
     miniMap: "miniMapView",
     teach: "teachView",
     copyright: "copyrightView",
-    sale: "saleView"
+    sale: "saleView",
+    about: "aboutView",
+    excel: "excelView"
   };
   var TYPE_LABEL = {
     npc: "NPC",
     monster: "怪物",
     transfer: "传送门",
     spawnPoint: "出生点",
-    item: "物体"
+    item: "物体",
+    obj: "物体",
+    prop: "道具",
+    event: "事件"
   };
   function entitySize(type, skin) {
     const defs = ENTITY_SKINS[type];
@@ -564,15 +649,36 @@
     EditorSpawnPoint: BASE.concat([
       attr("spawnId", "在当前地图出生点的Id", "number", true, true, "地图出生点Id"),
       attr("defaultSpawn", "设置是否是默认出生点", "bool", true, true, "默认出生点")
-    ])
+    ]),
+    // v2.0.2 新增的三种放置类型。`EditorObjElement` / `EditorEventObjElement`
+    // 在原版里就是 `baseAttributes.concat([])` —— 一个字段都不加，靠 `objName` /
+    // `assetsPath` 区分具体资源；只有道具多了「是否宝箱 / 道具id / 道具数量」。
+    EditorObjElement: BASE.slice(),
+    EditorPropElement: BASE.concat([
+      attr("isTreasure", "是否是宝箱", "bool", true, true, "是否是宝箱"),
+      attr("itemId", "拾取到的道具id", "number", true, true, "道具id"),
+      attr("itemNum", "拾取到的道具数量", "number", true, true, "道具数量")
+    ]),
+    EditorEventObjElement: BASE.slice()
   };
   var TYPE_TO_CLASS = {
     npc: "EditorNPC",
     monster: "EditorMonster",
     transfer: "EditorTransfer",
-    spawnPoint: "EditorSpawnPoint"
+    spawnPoint: "EditorSpawnPoint",
+    obj: "EditorObjElement",
+    prop: "EditorPropElement",
+    event: "EditorEventObjElement"
   };
-  var ENTITY_TYPES = ["npc", "monster", "transfer", "spawnPoint"];
+  var ENTITY_TYPES = [
+    "npc",
+    "monster",
+    "transfer",
+    "spawnPoint",
+    "obj",
+    "prop",
+    "event"
+  ];
   function schemaFor(entity) {
     return CLASS_DIC[entity?.className || "EditorElement"] || CLASS_DIC.EditorElement;
   }
@@ -589,6 +695,7 @@
       this.bgName = o.bgName || "map_bg";
       this.bgImage = o.bgImage ?? null;
       this.bgSrc = o.bgSrc ?? null;
+      this.alignment = o.alignment ?? 0;
     }
   };
   var MapDataModel = class _MapDataModel {
@@ -630,6 +737,15 @@
       };
     }
   };
+  var DEFAULT_OBJ_NAME = {
+    npc: "NPC",
+    monster: "怪物",
+    transfer: "传送门",
+    spawnPoint: "出生点",
+    obj: "物体",
+    prop: "道具",
+    event: "事件"
+  };
   function defaultEntity(type, x, y) {
     const cls = TYPE_TO_CLASS[type] || "EditorElement";
     const e = { type: type || "item", className: cls };
@@ -640,7 +756,7 @@
     }
     e.objId = "0";
     e.objType = "0";
-    e.objName = type === "npc" ? "NPC" : type === "monster" ? "怪物" : type === "transfer" ? "传送门" : type === "spawnPoint" ? "出生点" : "item";
+    e.objName = DEFAULT_OBJ_NAME[type] || "item";
     e.skin = "0";
     e.x = Math.round((x || 0) * 1e3) / 1e3;
     e.y = Math.round((y || 0) * 1e3) / 1e3;
@@ -668,7 +784,7 @@
     d.mapHeight = params.mapHeight;
     d.nodeWidth = params.ceilWidth;
     d.nodeHeight = params.ceilHeight;
-    d.alignment = 0;
+    d.alignment = params.alignment || 0;
     d.offsetX = 0;
     d.offsetY = 0;
     d.roadDataArr = road.map((r) => r.slice());
@@ -756,8 +872,8 @@
     }
     return true;
   }
-  function optimizePath(road, path, isPass) {
-    if (path.length < 3) return path;
+  function optimizePath(road, path, isPass, level = 2) {
+    if (level <= 0 || path.length < 3) return path;
     const rows = road.length, cols = road[0].length;
     const pass = (x, y) => y >= 0 && y < rows && x >= 0 && x < cols && isPass(road[y][x]);
     const out = path.slice();
@@ -771,6 +887,7 @@
         i--;
       }
     }
+    if (level < 2) return out;
     for (let i = 0; i < out.length - 2; i++) {
       let far = -1;
       for (let j = out.length - 1; j > i + 1; j--) {
@@ -783,7 +900,7 @@
     }
     return out;
   }
-  function findPath(road, sx, sy, tx, ty, mapType, pass = null, debug, maxSteps = 4e5) {
+  function findPath(road, sx, sy, tx, ty, mapType, pass = null, debug, maxSteps = 4e5, optimize = 2) {
     const rows = road.length;
     if (!rows) return null;
     const cols = road[0].length;
@@ -813,7 +930,7 @@
           path.push({ x: k % cols, y: Math.floor(k / cols) });
           k = came.get(k);
         }
-        return optimizePath(road, path.reverse(), isPass);
+        return optimizePath(road, path.reverse(), isPass, optimize);
       }
       closed.add(cur);
       if (openSet) openSet.delete(cur);

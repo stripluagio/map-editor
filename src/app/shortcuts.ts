@@ -1,4 +1,4 @@
-import { ROAD_KEYS } from '../core/constants';
+import { ROAD_KEYS, SHIFT_BRUSH_SIZE } from '../core/constants';
 import { findPath } from '../core/pathfinding';
 import { state } from './state';
 import { render } from '../render/canvas';
@@ -20,6 +20,11 @@ export function bindKeyboard(action: ActionHandler): void {
 
     if (e.ctrlKey && e.key.toLowerCase() === 'o') { e.preventDefault(); action('openFile'); return; }
     if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); action('saveFile'); return; }
+    // 另存为（Shift + S）—— 必须先于下面的 `k === 's'`（停止编辑事件）判断，
+    // 否则按 Shift 就永远进不了保存分支。原版标签就是「另存为（Shift + S）」。
+    if (e.shiftKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 's') {
+      e.preventDefault(); action('saveAsFile'); return;
+    }
     if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); action('testProject'); return; }
     if (e.ctrlKey && e.key.toLowerCase() === 'x') { e.preventDefault(); if (!typing) cutEntity(); return; }
     if (e.ctrlKey && e.key.toLowerCase() === 'c') { e.preventDefault(); if (!typing) copyEntity(); return; }
@@ -44,6 +49,16 @@ export function bindKeyboard(action: ActionHandler): void {
       return;
     }
     if (typing) return;
+    // Shift = 临时大笔刷（v2.0.2）。放在 typing 之后，输入框里按 Shift 不该改笔刷。
+    if (e.key === 'Shift') {
+      if (!state.shiftBrush) {
+        state.shiftBrush = true;
+        state.shiftBrushPrev = state.brushSize;
+        state.brushSize = SHIFT_BRUSH_SIZE;
+        updateToolPanel();
+      }
+      return;
+    }
     if (e.key === ' ') { state.spaceDown = true; e.preventDefault(); return; }
     const k = e.key.toLowerCase();
     if (k in ROAD_KEYS) { selectRoad(ROAD_KEYS[k]); return; }
@@ -54,7 +69,8 @@ export function bindKeyboard(action: ActionHandler): void {
     if (k === 'p') { action('showGridLayer'); return; }
     if (k === 'n') { action('setEditRoadModel'); return; }
     if (k === 'm') { action('setNormalRoadModel'); return; }
-    if (k === 'k') { state.showAnchor = !state.showAnchor; render(); return; }
+    // v2.0.2 标签是「隐藏物体锚点(Y)」；K 保留为兼容别名（旧版 Menubar 写的是 k）。
+    if (k === 'y' || k === 'k') { action('showAnchor'); return; }
     if (k === 'j') { action('toggleAuxLine'); return; }
     if (k === 'f1') { e.preventDefault(); action('hideBlockRoad'); return; }
     if (k === 'f2') { e.preventDefault(); openView('miniMap'); drawMiniMap(); return; }
@@ -62,7 +78,14 @@ export function bindKeyboard(action: ActionHandler): void {
     if (k === 'delete' || k === 'backspace') { deleteSelectedEntity(); return; }
     if (k === 'a') { astarTest(); return; }
   });
-  window.addEventListener('keyup', e => { if (e.key === ' ') state.spaceDown = false; });
+  window.addEventListener('keyup', e => {
+    if (e.key === ' ') state.spaceDown = false;
+    if (e.key === 'Shift' && state.shiftBrush) {
+      state.shiftBrush = false;
+      state.brushSize = state.shiftBrushPrev;   // 原版 `onShiftKeyUp` 还原 lastItem
+      updateToolPanel();
+    }
+  });
 }
 
 function astarTest(): void {

@@ -32,6 +32,14 @@ function updateInfoBar(n: ReturnType<typeof nodeAt>): void {
   $('testInfoPixel').textContent = px;
   $('testInfoGrid').textContent = grid;
   $('testInfoWorld').textContent = world;
+  // v2.0.2 信息栏多了两项：地图原点（左下角/左上角）与光标下的路点值。
+  const align = $('infoAlign');
+  if (align) align.textContent = (state.params && state.params.alignment) ? '基于左上角' : '基于左下角';
+  const rv = $('infoRoadValue');
+  if (rv) {
+    const v = state.road[n.dy]?.[n.dx];
+    rv.textContent = '(' + (v === undefined ? '-' : v) + ')';
+  }
 }
 
 export function clampView(): void {
