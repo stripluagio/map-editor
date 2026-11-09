@@ -105,6 +105,14 @@ function init(): void {
       render();
     },
   });
+
+  // Reveal the UI. `index.html` keeps `#app` hidden (inline style, so it works
+  // even when dist/style.css is the missing file) until this runs: a failed boot
+  // must show the red banner alone, not the whole static skeleton dumped as
+  // unstyled text. Reached only if every step above completed.
+  document.documentElement.classList.add('wm-booted');
+  const banner = document.getElementById('bootBanner');
+  if (banner) banner.style.display = 'none';   // covers a slow boot past the 2.5 s guard
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

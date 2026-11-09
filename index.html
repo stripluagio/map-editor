@@ -5,6 +5,22 @@
 <title>Map Editor</title>
 <meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1">
 <link rel="stylesheet" href="dist/style.css">
+<style>
+/* Hide the static shell until the app has actually booted.
+ *
+ * `index.html` carries the whole UI skeleton as static markup (toolbars, panels,
+ * every label and input). If `dist/style.css` or `dist/app.js` is missing — the
+ * usual result of opening this file from *inside* a zip, or serving the wrong
+ * root — that markup renders as a wall of unstyled text with no canvas. To the
+ * user that reads as "this download is broken / has no example map", which is
+ * exactly the report we are fixing.
+ *
+ * Inline on purpose: `dist/style.css` may be the very file that is missing, so
+ * this rule cannot live in it.
+ */
+#app { visibility: hidden; }
+html.wm-booted #app { visibility: visible; }
+</style>
 </head>
 <body>
 <div id="app">
@@ -205,6 +221,11 @@
  * stops `init()` from finishing (missing dist/app.js, a thrown error, a blocked
  * asset) now surfaces as a red bar with the actual reason. Inline styles on
  * purpose: this must still be readable when dist/style.css is the missing file.
+ *
+ * The page URL is printed on purpose. The most common cause is opening
+ * `index.html` *from inside* the downloaded zip: Explorer extracts that one file
+ * to a temp folder, so `dist/` and `assets/` are simply not next to it. Seeing
+ * `.../Temp/...` in the URL makes that instantly obvious.
  */
 (function () {
   setTimeout(function () {
@@ -212,16 +233,30 @@
     var box = document.getElementById('bootBanner');
     if (!box) return;
     var errs = (window.__errs || []).filter(Boolean).slice(0, 3);
+    var where = location.href;
+    var inTemp = /[\\/](Temp|tmp)[\\/]|^blob:|^about:/i.test(where);
     box.style.display = 'block';
     box.innerHTML =
       '<b style="font-size:20px">编辑器启动失败</b><br>' +
       (window.__bootErr || 'dist/app.js 已加载，但初始化没有跑完') +
       (errs.length ? '<br>页面报错：' + errs.join('<br>') : '') +
-      '<br><br>请确认仓库根目录下同时存在 <code>index.html</code>、<code>dist/app.js</code>、' +
+      '<br><br>当前页面地址：<code style="word-break:break-all">' + where + '</code>' +
+      (inTemp
+        ? '<br><b>这个地址看起来是临时目录</b> —— 如果你是在压缩包里直接双击 index.html，' +
+          '浏览器只把这一个文件解到临时目录，<code>dist/</code> 和 <code>assets/</code> 不在它旁边。' +
+          '请先把压缩包<b>完整解压</b>到一个普通文件夹，再双击里面的 index.html。'
+        : '') +
+      '<br><br>请确认 <code>index.html</code> 同级存在 <code>dist/app.js</code>、' +
       '<code>dist/style.css</code>、<code>assets/map_bg.jpg</code>；' +
-      '也可以运行 <code>npm run serve</code>，打开它打印的地址。';
+      '或者运行 <code>npm run serve</code>，打开它打印的地址。';
   }, 2500);
 })();
 </script>
+<noscript>
+  <div style="position:fixed;left:0;right:0;top:0;z-index:99999;background:#8b1d1d;color:#fff;
+    font:15px/1.8 'Microsoft YaHei',sans-serif;padding:16px 22px">
+    这个编辑器需要 JavaScript。请在浏览器设置里允许本页运行脚本后刷新。
+  </div>
+</noscript>
 </body>
 </html>

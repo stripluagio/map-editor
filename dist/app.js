@@ -3727,6 +3727,9 @@
         render();
       }
     });
+    document.documentElement.classList.add("wm-booted");
+    const banner = document.getElementById("bootBanner");
+    if (banner) banner.style.display = "none";
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

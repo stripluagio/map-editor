@@ -15,6 +15,7 @@
  */
 'use strict';
 const http = require('http');
+const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const WS = require('./wsmini.cjs');
@@ -74,6 +75,8 @@ function eq(name, a, b) { ok(name, a === b, { got: a, want: b }); }
   console.log('== degraded boot: background image blocked ==');
   ok('no JS errors', JSON.stringify(await ev('window.__errs')) === '[]', await ev('window.__errs'));
   ok('WMApp exists (init() finished)', (await ev('typeof WMApp')) === 'object', await ev('typeof WMApp'));
+  eq('shell is revealed once booted', await ev("document.documentElement.classList.contains('wm-booted')"), true);
+  eq('shell is visible', await ev("getComputedStyle(document.getElementById('app')).visibility"), 'visible');
   eq('document created anyway', await ev('WMApp.params && WMApp.params.name'), 'mapData');
   eq('map type kept', await ev('WMApp.params && WMApp.params.mapType'), 3);
   const dims = await ev('JSON.stringify({r:WMApp.road.length,c:WMApp.road[0].length})');
@@ -134,6 +137,34 @@ function eq(name, a, b) { ok(name, a === b, { got: a, want: b }); }
   ok('banner tells the user how to fix it',
      /npm run serve/.test(bannerText || '') && /assets\/map_bg\.jpg/.test(bannerText || ''), bannerText);
   eq('no app booted', await ev('typeof WMApp'), 'undefined');
+  // The static skeleton must stay hidden — otherwise a failed boot shows every
+  // toolbar label and input as a wall of unstyled text, which is precisely the
+  // "this download has no map" impression we are eliminating.
+  eq('shell stays hidden on failure', await ev("getComputedStyle(document.getElementById('app')).visibility"), 'hidden');
+  eq('booted class never added', await ev("document.documentElement.classList.contains('wm-booted')"), false);
+
+  /* ---- scenario 3: index.html alone (opened from inside a zip) -------------
+   * This is the reported symptom: the browser gets only index.html — e.g. the
+   * user double-clicked it inside the zip, so Explorer extracted that single
+   * file to a temp folder and dist/ + assets/ are not beside it. The banner
+   * must name that cause, and the shell must not leak through.
+   */
+  console.log('\n== degraded boot: index.html alone (zip / wrong root) ==');
+  const lonely = fs.mkdtempSync(path.join(require('os').tmpdir(), 'wm-lonely-'));
+  fs.copyFileSync(path.join(__dirname, '..', 'index.html'), path.join(lonely, 'index.html'));
+  await send('Network.setBlockedURLs', { urls: [] });
+  const lonelyUrl = 'file:///' + path.join(lonely, 'index.html').replace(/\\/g, '/');
+  await send('Page.navigate', { url: lonelyUrl });
+  await sleep(3400);
+
+  eq('still no app', await ev('typeof WMApp'), 'undefined');
+  eq('banner visible', await ev("document.getElementById('bootBanner').style.display"), 'block');
+  eq('shell hidden', await ev("getComputedStyle(document.getElementById('app')).visibility"), 'hidden');
+  const lonelyText = await ev("document.getElementById('bootBanner').textContent");
+  ok('banner prints the page URL', (lonelyText || '').includes('index.html'), lonelyText);
+  ok('banner explains the unzip cause',
+     /临时目录/.test(lonelyText || '') && /完整解压/.test(lonelyText || ''), lonelyText);
+  fs.rmSync(lonely, { recursive: true, force: true });
 
   console.log('\nRESULT: ' + pass + ' passed, ' + fail + ' failed');
   ch.kill();
