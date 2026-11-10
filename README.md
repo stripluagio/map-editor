@@ -483,6 +483,18 @@ Protocol（`tests/wsmini.cjs` 是一个两百行的 WebSocket 客户端）。真
 只有 `index.html` 时横幅会点明"这是在压缩包里直接双击"这个具体原因。
 这条探针存在的理由就是：**静默失败比崩溃更难排查**。
 
+**线上互通探针**（`tests/probe_interop_v202.cjs`）：把本项目导出的 JSON 直接喂给
+线上 v2.0.2（`MapEditor.openMap`），再把它导出的结果逐字段比回来。结论是
+老的 4 类（npc / monster / transfer / spawnPoint）**完全无损**，新增的
+obj / prop / event **会被 v2.0.2 静默丢弃**——原因和这三类的资源模型有关，
+细节见 [`docs/PARITY.md` §3.8](docs/PARITY.md)。
+
+另外记一条踩过的坑：**CDP 的 `DOM.setFileInputFiles` 对 `<input webkitdirectory>`
+是无效的**——它返回成功，但 `input.files.length` 仍是 0、`change` 也不触发，
+因为浏览器无法为目录输入合成 `webkitRelativePath`。所以「导入编辑资源」的自动化
+只能像 `e2e.cjs` 那样手工构造带 `webkitRelativePath` 的 `File`，不要指望用真实
+磁盘目录在 headless 里跑通。
+
 ---
 
 ## 构建与部署

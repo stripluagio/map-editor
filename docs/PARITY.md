@@ -312,6 +312,46 @@ var c = mapType == MapType.angle45 ? 2 * i : i;   // i = MapRoadUtils.row
 | `WMAddEntity(obj)` | 追加一个经 `normalizeEntity` 规范化的实体 |
 | `WMLoadData(json)` | 和「文件 → 打开」走**同一个** `paramsFromMapData()`，返回导出结果 |
 
+### 3.8 与线上 v2.0.2 的互通（实测：4/7 类无损，新增三类不可移植）
+
+3.4 那批字节相等的结论是对**本地原版**做的。v2.0.2 又加了 `obj` / `prop` / `event`
+三类，而这三类的资源模型和老的 4 类不一样，所以单独测了一遍。
+
+跑法：`node tests/probe_interop_v202.cjs`（克隆 8900 导出 → 线上 v2.0.2
+`MapEditor.openMap(data, null)` → 再 `getMapData()` 回来）。不用文件选择器是因为线上
+`openFile` 走 `window.showOpenFilePicker`，headless 里无法触发；`openMap` 是它内部的
+同一条导入路径（`editArea.initMapData`）。
+
+| 类型 | v2.0.2 内置资源条目 | 导入结果 |
+| --- | --- | --- |
+| npc | 4 | ✅ 全部业务字段原样保留（含 `x=300.5` 这种小数） |
+| monster | 4 | ✅ |
+| transfer | 3 | ✅ |
+| spawnPoint | 1 | ✅ |
+| obj（sceneObject） | 2 | ❌ 被丢弃 |
+| prop（propObject） | **0** | ❌ 被丢弃 |
+| event（eventObject） | **0** | ❌ 被丢弃 |
+
+顶层字段全部无损：`name` / `bgName` / `type` / `mapWidth` / `mapHeight` /
+`nodeWidth` / `nodeHeight` / `alignment` / `roadDataArr`（连内容整串相同）都保住了。
+
+**为什么三类会被丢**：v2.0.2 的 `initMapUintInfo` 对每条 item 先做
+`getEditObjectData(type, objTag, assetsType, assetsPath)` 反查资源，解析不出来就
+`initUnit(null)` —— 里面是 `if (null != t)`，**静默跳过**，不报错也不提示。
+它反查的依据是 `objTag`（内置表下标）或 `assetsPath`（导入资源的路径）。
+本项目导出的 item 只有 `skin`（自家皮肤下标）和 `objName`，没有 `objTag` /
+`assetsType` / `assetsPath`，所以这三类落不到任何资源上。
+
+**`prop` 和 `event` 是硬限制**：v2.0.2 自己的 `propSelectorConfig` /
+`eventObjectSelectorConfig` 里内置条目数是 **0** —— 这两类在 v2.0.2 里只能来自
+用户导入的资源目录，没有内置资源可回落。也就是说，即便补上 `objTag` 也没用，
+必须在两边导入**同一批图片**、并按 `assetsPath` 对上，才有可能还原。
+
+**本项目当前的取舍**：导出仍按本地原版的格式走（`skin` 下标），不写
+`assetsType` / `assetsPath`。理由是写了也只在这两个条件下才有意义
+（对方导入了同名资源），而按 schema 键序导出的老 4 类必须保持和本地原版字节相等，
+不能为了这三类去动公共字段。需要跨到 v2.0.2 的工程，建议只把老 4 类当作可移植部分。
+
 ---
 
 ## 四、对齐线上 v2.0.2（`/v2.0.0/web-mobile/` 实际是 2.0.2）
