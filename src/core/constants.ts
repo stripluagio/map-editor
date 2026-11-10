@@ -355,9 +355,29 @@ export const TYPE_LABEL: Record<string, string> = {
   obj: '物体', prop: '道具', event: '事件',
 };
 
+/**
+ * 用户导入的皮肤（「文件 → 导入编辑资源」）。**追加在内置皮肤之后**，
+ * 所以 `skin` 索引不会错位 —— 导入前后已有实体的索引含义不变。
+ * 图片是 `blob:` 对象 URL，刷新页面就没了，需要重新导入（原版也一样，
+ * 它把资源放在内存里的 `EditAssets` 中）。
+ */
+export const IMPORTED_SKINS: Record<string, SkinDef[]> = {};
+
+/** 某个类型当前可选的皮肤 = 内置 + 已导入。 */
+export function skinsFor(type: string): readonly SkinDef[] {
+  const builtin = ENTITY_SKINS[type as EntityType] || [];
+  const extra = IMPORTED_SKINS[type];
+  return extra && extra.length ? builtin.concat(extra) : builtin;
+}
+
+/** 清空某个类型的导入皮肤（重新导入前调用）。 */
+export function clearImportedSkins(type: string): void {
+  delete IMPORTED_SKINS[type];
+}
+
 /** Drawn size + selection-ring geometry for an entity skin. */
 export function entitySize(type: string, skin: number): { w: number; h: number } {
-  const defs = ENTITY_SKINS[type as EntityType];
+  const defs = skinsFor(type);
   if (!defs || !defs.length) return { w: 100, h: 100 };
   const d = defs[skin % defs.length];
   return { w: d.w || 100, h: d.h || 100 };

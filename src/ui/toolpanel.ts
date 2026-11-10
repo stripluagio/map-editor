@@ -1,4 +1,4 @@
-import { ROAD_SWATCHES, BRUSH_SIZES, ENTITY_SKINS, TOOL_TITLES, TOOL_TO_ACTION } from '../core/constants';
+import { ROAD_SWATCHES, BRUSH_SIZES, skinsFor, TOOL_TITLES, TOOL_TO_ACTION } from '../core/constants';
 import type { ToolName } from '../core/types';
 import { entityColor } from '../core/color';
 import { state } from '../app/state';
@@ -48,8 +48,9 @@ function buildBrushPanel(c: HTMLElement): void {
 }
 
 function buildEntityPanel(c: HTMLElement, tool: ToolName): void {
-  const skins = (ENTITY_SKINS as Record<string, readonly { label: string; icon: string }[]>)[tool]
-             || [{ label: '默认', icon: '' }];
+  const skins = (skinsFor(tool) as readonly { label: string; icon: string }[]).length
+             ? skinsFor(tool) as readonly { label: string; icon: string }[]
+             : [{ label: '默认', icon: '' }];
   const sprites = state.sprites[tool] || [];
   skins.forEach((def, i) => {
     const item = el('div', 'tool-item' + (state.entitySkin === i ? ' selected' : ''));

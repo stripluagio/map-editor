@@ -18,6 +18,7 @@
     ENTITY_SKINS: () => ENTITY_SKINS,
     ENTITY_TYPES: () => ENTITY_TYPES,
     GRID_BORDER: () => GRID_BORDER,
+    IMPORTED_SKINS: () => IMPORTED_SKINS,
     LAUNCH_PARAMS: () => LAUNCH_PARAMS,
     MAP_TYPE_NAMES: () => MAP_TYPE_NAMES,
     MAX_CEIL_COUNT: () => MAX_CEIL_COUNT,
@@ -47,6 +48,7 @@
     angle45Lines: () => angle45Lines,
     angle90Lines: () => angle90Lines,
     buildMapData: () => buildMapData,
+    clearImportedSkins: () => clearImportedSkins,
     computeGridSize: () => computeGridSize,
     defaultEntity: () => defaultEntity,
     defaultRoadSets: () => defaultRoadSets,
@@ -69,7 +71,8 @@
     rgbaToHex: () => rgbaToHex,
     roadRenderColor: () => roadRenderColor,
     roadRowCount: () => roadRowCount,
-    schemaFor: () => schemaFor
+    schemaFor: () => schemaFor,
+    skinsFor: () => skinsFor
   });
 
   // src/core/types.ts
@@ -365,8 +368,17 @@
     prop: "道具",
     event: "事件"
   };
+  var IMPORTED_SKINS = {};
+  function skinsFor(type) {
+    const builtin = ENTITY_SKINS[type] || [];
+    const extra = IMPORTED_SKINS[type];
+    return extra && extra.length ? builtin.concat(extra) : builtin;
+  }
+  function clearImportedSkins(type) {
+    delete IMPORTED_SKINS[type];
+  }
   function entitySize(type, skin) {
-    const defs = ENTITY_SKINS[type];
+    const defs = skinsFor(type);
     if (!defs || !defs.length) return { w: 100, h: 100 };
     const d = defs[skin % defs.length];
     return { w: d.w || 100, h: d.h || 100 };

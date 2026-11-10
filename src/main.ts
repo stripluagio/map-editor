@@ -3,7 +3,8 @@
  * Wires core / state / render / ui / app modules together.
  * ========================================================================== */
 import { MapType } from './core/types';
-import { ENTITY_SKINS, entitySize, entityRing } from './core/constants';
+import { entitySize, entityRing } from './core/constants';
+import { loadEntitySprites } from './app/sprites';
 import { state, exposeGlobals } from './app/state';
 import { fitStage, bindMapInput } from './app/input';
 import { createSampleMap, initDocument } from './app/document';
@@ -33,17 +34,7 @@ function loadAssets(): void {
   cs.src = 'assets/character_sheet.png';
   // One distinct sprite per selector; Transfer_1/2 are frame animations
   // (original AnimationController: 8 and 11 frames at 0.1s).
-  for (const [type, defs] of Object.entries(ENTITY_SKINS)) {
-    state.sprites[type] = defs.map(def => {
-      const files = def.frames && def.frames.length ? def.frames : [def.icon];
-      return files.map(src => {
-        const im = new Image();
-        im.onload = () => render();
-        im.src = src;
-        return im;
-      });
-    });
-  }
+  loadEntitySprites();
 }
 
 function init(): void {

@@ -1,5 +1,5 @@
 import { defaultEntity } from '../core/model';
-import { ENTITY_SKINS, entityRing } from '../core/constants';
+import { skinsFor, entityRing } from '../core/constants';
 import type { MapItem, RoadNode } from '../core/types';
 import { state } from './state';
 import { render } from '../render/canvas';
@@ -58,7 +58,7 @@ export function paintAt(node: RoadNode, value: number, erase = false): void {
 /** Build an entity of the currently-selected type + skin. */
 function makeCurrentEntity(type: 'npc' | 'monster' | 'transfer' | 'spawnPoint', x: number, y: number): MapItem {
   const e = defaultEntity(type, x, y);
-  const skins = ENTITY_SKINS[type] || [];
+  const skins = skinsFor(type);
   const skinDef = skins[state.entitySkin] || skins[0];
   e.skin = String(state.entitySkin);
   e.objName = skinDef ? skinDef.objName : (type === 'npc' ? 'NPC' : type === 'monster' ? '怪物' : '出生点');

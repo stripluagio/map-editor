@@ -284,8 +284,17 @@
     prop: "道具",
     event: "事件"
   };
+  var IMPORTED_SKINS = {};
+  function skinsFor(type) {
+    const builtin = ENTITY_SKINS[type] || [];
+    const extra = IMPORTED_SKINS[type];
+    return extra && extra.length ? builtin.concat(extra) : builtin;
+  }
+  function clearImportedSkins(type) {
+    delete IMPORTED_SKINS[type];
+  }
   function entitySize(type, skin) {
-    const defs = ENTITY_SKINS[type];
+    const defs = skinsFor(type);
     if (!defs || !defs.length) return { w: 100, h: 100 };
     const d = defs[skin % defs.length];
     return { w: d.w || 100, h: d.h || 100 };
@@ -1095,7 +1104,7 @@
        */
       this.shiftBrush = false;
       this.shiftBrushPrev = 0;
-      /** 导入编辑资源时扫到的图片文件名（预设规则导入尚未实现，见 app/io.ts）。 */
+      /** 导入编辑资源后生成的图片对象 URL（`blob:`，刷新即失效，见 app/io.ts）。 */
       this.importedAssets = [];
       /**
        * 原版 `GridLayer._isShowAuxiliaryLine` 默认是 `true`；本项目**故意默认关闭**，
@@ -1569,7 +1578,7 @@
       const isGhost = e === state.brushEntity;
       const x = Number(e.x) || 0, y = Number(e.y) || 0;
       const skin = Number(e.skin) || 0;
-      const defs = ENTITY_SKINS[e.type];
+      const defs = skinsFor(e.type);
       const def = defs ? defs[skin % defs.length] : void 0;
       const sets = state.sprites[e.type] || [];
       const frames = sets[skin % Math.max(1, sets.length)] || [];
@@ -1708,6 +1717,23 @@
     }
   }
 
+  // src/app/sprites.ts
+  var TYPES = ["npc", "monster", "transfer", "spawnPoint", "obj", "prop", "event"];
+  function loadEntitySprites() {
+    for (const type of TYPES) {
+      const defs = skinsFor(type);
+      state.sprites[type] = defs.map((def) => {
+        const files = def.frames && def.frames.length ? def.frames : [def.icon];
+        return files.map((src) => {
+          const im = new Image();
+          im.onload = () => render();
+          im.src = src;
+          return im;
+        });
+      });
+    }
+  }
+
   // src/ui/dom.ts
   var $ = (id) => document.getElementById(id);
   var $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -1837,7 +1863,7 @@
   }
   function makeCurrentEntity(type, x, y) {
     const e = defaultEntity(type, x, y);
-    const skins = ENTITY_SKINS[type] || [];
+    const skins = skinsFor(type);
     const skinDef = skins[state.entitySkin] || skins[0];
     e.skin = String(state.entitySkin);
     e.objName = skinDef ? skinDef.objName : type === "npc" ? "NPC" : type === "monster" ? "怪物" : "出生点";
@@ -3039,7 +3065,7 @@
     }
   }
   function buildEntityPanel(c, tool) {
-    const skins = ENTITY_SKINS[tool] || [{ label: "默认", icon: "" }];
+    const skins = skinsFor(tool).length ? skinsFor(tool) : [{ label: "默认", icon: "" }];
     const sprites = state.sprites[tool] || [];
     skins.forEach((def, i) => {
       const item = el2("div", "tool-item" + (state.entitySkin === i ? " selected" : ""));
@@ -3201,15 +3227,78 @@
       input.remove();
       if (!files.length) return;
       const root = String(files[0].webkitRelativePath || "").split("/")[0];
-      if (root !== "MapEditorAssets" && root !== "mapAssets" && root !== "MapAssets") {
+      if (!ASSET_ROOTS.has(root)) {
         toast("上传本地资源只支持命名为 MapEditorAssets 或 mapAssets 或 MapAssets 的根文件目录");
         return;
       }
-      const images = files.filter((f) => /\.(png|jpg|jpeg|webp)$/i.test(f.name));
-      state.importedAssets = images.map((f) => f.name);
-      toast("已读取 " + images.length + " 张图片（" + root + "）。本版尚未实现「资源预设规则」导入，图片暂未进入可选皮肤列表");
+      void applyImportedAssets(files, root);
     });
     input.click();
+  }
+  var ASSET_ROOTS = /* @__PURE__ */ new Set(["MapEditorAssets", "mapAssets", "MapAssets"]);
+  var ASSET_TYPE_BY_FOLDER = {
+    npc: "npc",
+    monster: "monster",
+    transfer: "transfer",
+    spawnpoint: "spawnPoint",
+    sceneobject: "obj",
+    propobject: "prop",
+    eventobject: "event"
+  };
+  var IMAGE_RE = /\.(png|jpe?g|webp|gif)$/i;
+  function imageSize(url) {
+    return new Promise((resolve) => {
+      const im = new Image();
+      im.onload = () => resolve({ w: im.naturalWidth || im.width, h: im.naturalHeight || im.height });
+      im.onerror = () => resolve(null);
+      im.src = url;
+    });
+  }
+  async function applyImportedAssets(files, root) {
+    const added = {};
+    const urls = [];
+    const groups = /* @__PURE__ */ new Map();
+    for (const f of files) {
+      if (!IMAGE_RE.test(f.name)) continue;
+      const rel = String(f.webkitRelativePath || f.name);
+      const parts = rel.split("/");
+      if (parts.length < 3) continue;
+      const type = ASSET_TYPE_BY_FOLDER[parts[1].toLowerCase()];
+      if (!type) continue;
+      const list = groups.get(type) || [];
+      list.push(f);
+      groups.set(type, list);
+    }
+    for (const [type, list] of groups) {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+      const defs = [];
+      for (const f of list) {
+        const url = URL.createObjectURL(f);
+        const size = await imageSize(url);
+        if (!size) {
+          URL.revokeObjectURL(url);
+          continue;
+        }
+        urls.push(url);
+        const name = f.name.replace(/\.[^.]+$/, "");
+        defs.push({ label: name, icon: url, objName: name, w: size.w, h: size.h });
+      }
+      if (!defs.length) continue;
+      clearImportedSkins(type);
+      IMPORTED_SKINS[type] = defs;
+      added[type] = defs.length;
+    }
+    if (urls.length) {
+      loadEntitySprites();
+      state.importedAssets = urls;
+      updateToolPanel();
+      render();
+      const summary = Object.entries(added).map(([t, n]) => TYPE_LABEL[t] + " " + n).join("、");
+      toast("已导入 " + urls.length + " 张图片（" + root + "）：" + summary);
+    } else {
+      toast("在 " + root + " 里没找到可用的图片。请按 MapEditorAssets/NPC/xxx.png 这样的「根目录/类型/图片」结构放文件");
+    }
+    return added;
   }
   function exportTiles() {
     const p = state.params;
@@ -4137,14 +4226,14 @@
     }
     return rows.filter((r) => r.some((c) => c.trim() !== ""));
   }
-  var TYPES = ["int", "number", "string", "bool", "any"];
+  var TYPES2 = ["int", "number", "string", "bool", "any"];
   function toType(raw) {
     const s = (raw || "").trim().toLowerCase();
     if (s === "int" || s === "integer") return "int";
     if (s === "number" || s === "float" || s === "double") return "number";
     if (s === "string" || s === "str" || s === "text") return "string";
     if (s === "bool" || s === "boolean") return "bool";
-    return TYPES.includes(s) ? s : "any";
+    return TYPES2.includes(s) ? s : "any";
   }
   function readFields(rows) {
     if (rows.length < 3) throw new Error("最少3行：第一行是描述，第二行是字段名，第三行是字段类型");
@@ -4349,17 +4438,7 @@
       render();
     };
     cs.src = "assets/character_sheet.png";
-    for (const [type, defs] of Object.entries(ENTITY_SKINS)) {
-      state.sprites[type] = defs.map((def) => {
-        const files = def.frames && def.frames.length ? def.frames : [def.icon];
-        return files.map((src) => {
-          const im = new Image();
-          im.onload = () => render();
-          im.src = src;
-          return im;
-        });
-      });
-    }
+    loadEntitySprites();
   }
   function init() {
     const w = window;

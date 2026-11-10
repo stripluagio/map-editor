@@ -1,7 +1,7 @@
 import { MapType } from '../core/types';
 import type { MapItem } from '../core/types';
 import { hexToRgba, roadRenderColor, entityColor } from '../core/color';
-import { TYPE_LABEL, ENTITY_SKINS, entityRing } from '../core/constants';
+import { TYPE_LABEL, skinsFor, entityRing } from '../core/constants';
 import { state } from '../app/state';
 import { blitScene } from './cache';
 import { context2d, inView, sizeCanvas } from './context';
@@ -91,7 +91,7 @@ export function drawEntities(ctx: CanvasRenderingContext2D): void {
     const isGhost = e === state.brushEntity;
     const x = Number(e.x) || 0, y = Number(e.y) || 0;
     const skin = Number(e.skin) || 0;
-    const defs = ENTITY_SKINS[e.type as 'npc'];
+    const defs = skinsFor(e.type);
     const def = defs ? defs[skin % defs.length] : undefined;
     const sets = state.sprites[e.type] || [];
     const frames = sets[skin % Math.max(1, sets.length)] || [];

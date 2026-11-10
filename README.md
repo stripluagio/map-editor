@@ -55,6 +55,9 @@ TypeScript + Canvas 2D   ·   零运行时依赖   ·   4.6k 行源码   ·   16
 - 出生点支持「默认出生点」互斥（同图只能有一个，勾选新的会自动取消旧的）
 - 道具额外带「是否宝箱 / 道具id / 道具数量」三个字段（对齐原版 `EditorPropElement`）
 - 剪切 / 复制 / 粘贴（Ctrl+X / C / V），删除（Delete）
+- **导入编辑资源**：选一个 `MapEditorAssets` 目录，里面的图片按子目录名
+  （`NPC` / `Monster` / `Transfer` / `SpawnPoint` / `SceneObject` / `PropObject` /
+  `EventObject`）自动变成对应类型的可选皮肤，尺寸取图片自然尺寸
 
 **试玩**
 
@@ -447,7 +450,7 @@ spawnPoint  type objId objName objType skin x y cx cy params spawnId defaultSpaw
 
 ```bash
 npm run test:unit     # 161 passed  —— 纯逻辑，Node 里跑，不需要浏览器
-npm run test:e2e      # 253 passed  —— 真浏览器，走 CDP，需要先起 8900 服务
+npm run test:e2e      # 267 passed  —— 真浏览器，走 CDP，需要先起 8900 服务
 ```
 
 **单测**（`tests/unit.test.cjs`）：用 `node:vm` 加载 `dist/core.js`，覆盖几何换算、
@@ -519,8 +522,10 @@ npm run build
 - **只实现 A\* 寻路**。原版的 RCA 寻路（预烘焙拐角图 + 矩形对称性剪枝）没做，
   所以「寻路设置」里的 RCA 选项和「显示路点墙角」是禁用的，界面上有说明；
   其余寻路设置（最大步数、重放帧率、导航线、优化等级）都真的生效。
-- **`obj` / `prop` / `event` 的皮肤是内置占位图**。原版这些资源来自用户导入的
-  `MapEditorAssets` 目录，本项目还没有资源导入流程；字段结构仍与原版一致。
+- **`obj` / `prop` / `event` 默认用内置占位图**。原版这三类开箱是空的，必须自己导入
+  `MapEditorAssets`；这里给了几张内置图让工具立刻可用，导入后会用你的图追加在后面。
+- **导入时不解析 `Presets/Presets.xlsx`**。原版靠这张表给每个资源配名字和尺寸，
+  这里名字取文件名、尺寸取图片自然尺寸 —— 少一层配置也能用，字段结构不变。
 
 ---
 

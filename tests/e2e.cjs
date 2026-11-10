@@ -405,7 +405,8 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   ok('alignment survives open → export', alignRound.params===1 && alignRound.exported===1, alignRound);
   await E("WMApp.params.alignment=0;WMLoadData(WMGetMapData().toJson());1");
 
-  console.log('== v2.0.2: 导入编辑资源 目录校验 ==');
+  console.log('== v2.0.2: 导入编辑资源（目录校验 + 真把图片变成皮肤）==');
+  // ① 根目录名不对 —— 必须给出原版那句提示，且不能改动皮肤表
   await E("WMAction('importEditAssets')");
   const rejected = await E(`(function(){
     var inp = document.querySelector('input[webkitdirectory]');
@@ -418,6 +419,97 @@ function eq(name,a,b){ ok(name, a===b, {got:a, want:b}); }
   })()`);
   ok('wrong root folder is rejected with the original message',
      /只支持命名为 MapEditorAssets 或 mapAssets 或 MapAssets/.test(String(rejected)), rejected);
+  eq('rejected import leaves obj skins untouched',
+     await E("JSON.stringify([0,1,2].map(function(i){return WMCore.entitySize('obj',i)}))"),
+     '[{"w":72,"h":72},{"w":64,"h":76},{"w":64,"h":84}]');
+
+  // ② 真实导入：按「根目录/类型/图片」建目录，喂给真正的 <input webkitdirectory>
+  const imported = await E(`(async function(){
+    function mk(name, w, h, rel){
+      return new Promise(function(res){
+        var c = document.createElement('canvas'); c.width = w; c.height = h;
+        var x = c.getContext('2d'); x.fillStyle = '#cc3344'; x.fillRect(0, 0, w, h);
+        c.toBlob(function(b){
+          var f = new File([b], name, {type: 'image/png'});
+          Object.defineProperty(f, 'webkitRelativePath', {value: rel});
+          res(f);
+        }, 'image/png');
+      });
+    }
+    WMAction('importEditAssets');
+    var inp = document.querySelector('input[webkitdirectory]');
+    if (!inp) return 'no-input';
+    var dt = new DataTransfer();
+    dt.items.add(await mk('宝箱.png', 40, 60, 'MapEditorAssets/SceneObject/宝箱.png'));
+    dt.items.add(await mk('石碑.png', 30, 44, 'MapEditorAssets/SceneObject/石碑.png'));
+    dt.items.add(await mk('金币.png', 24, 24, 'MapEditorAssets/PropObject/金币.png'));
+    dt.items.add(await mk('readme.txt', 1, 1, 'MapEditorAssets/NPC/readme.txt'));
+    inp.files = dt.files;
+    inp.dispatchEvent(new Event('change'));
+    return 'ok';
+  })()`);
+  eq('folder picker accepted', imported, 'ok');
+  await sleep(900);
+  ok('import reports what it added',
+     /已导入 3 张图片.*物体 2.*道具 1/.test(await E("document.getElementById('toast').textContent")),
+     await E("document.getElementById('toast').textContent"));
+  eq('SceneObject → 物体，按图片自然尺寸追加',
+     await E("JSON.stringify([3,4].map(function(i){return WMCore.entitySize('obj',i)}))"),
+     '[{"w":40,"h":60},{"w":30,"h":44}]');
+  eq('PropObject → 道具',
+     await E("JSON.stringify(WMCore.entitySize('prop',3))"), '{"w":24,"h":24}');
+  eq('内置皮肤索引不变（npc 还是 4 个）',
+     await E("WMApp.sprites.npc.length"), 4);
+  eq('非图片文件被忽略（只有 3 张进表）',
+     await E("WMApp.sprites.obj.length + ',' + WMApp.sprites.prop.length"), '5,4');
+  ok('导入的图片真的解码成功',
+     (await E("(function(){var s=WMApp.sprites.obj[3];return !!(s&&s[0]&&s[0].complete&&s[0].naturalWidth===40)})()"))===true);
+
+  await E("WMAction('openObjWin')");
+  await sleep(150);
+  eq('左侧面板出现导入的皮肤',
+     await E("[].map.call(document.querySelectorAll('#toolContent .tool-label'),function(e){return e.textContent}).join('|')"),
+     '宝箱物件|木桶物件|石碑物件|宝箱|石碑');
+
+  const placedImported = JSON.parse(await E(`(function(){
+    var items = document.querySelectorAll('#toolContent .tool-item');
+    items[3].dispatchEvent(new MouseEvent('mousedown', {bubbles: true}));
+    var e = WMApp.brushEntity;
+    if (!e) return JSON.stringify({armed: false});
+    e.x = 400; e.y = 400;
+    WMApp.entities.push(e); WMApp.brushEntity = null;
+    var it = WMGetMapData().toJson().mapItems.filter(function(x){return x.type === 'obj'})[0];
+    return JSON.stringify({armed: true, objName: it && it.objName, skin: it && it.skin});
+  })()`));
+  ok('放置导入的皮肤，objName 用文件名', placedImported.armed && placedImported.objName === '宝箱', placedImported);
+  eq('放置时 skin 记的是追加后的索引', placedImported.skin, '3');
+
+  // ③ 再导入一次同类 —— 覆盖而不是无限累加
+  await E(`(async function(){
+    function mk(name, w, h, rel){
+      return new Promise(function(res){
+        var c = document.createElement('canvas'); c.width = w; c.height = h;
+        var x = c.getContext('2d'); x.fillStyle = '#33cc44'; x.fillRect(0, 0, w, h);
+        c.toBlob(function(b){
+          var f = new File([b], name, {type: 'image/png'});
+          Object.defineProperty(f, 'webkitRelativePath', {value: rel});
+          res(f);
+        }, 'image/png');
+      });
+    }
+    WMAction('importEditAssets');
+    var inp = document.querySelector('input[webkitdirectory]');
+    var dt = new DataTransfer();
+    dt.items.add(await mk('新宝箱.png', 50, 50, 'MapEditorAssets/SceneObject/新宝箱.png'));
+    inp.files = dt.files;
+    inp.dispatchEvent(new Event('change'));
+  })()`);
+  await sleep(800);
+  eq('同类重复导入是覆盖（物体回到 3 内置 + 1 新导入）',
+     await E("WMApp.sprites.obj.length"), 4);
+  eq('覆盖后索引 3 指向新图片',
+     await E("JSON.stringify(WMCore.entitySize('obj',3))"), '{"w":50,"h":50}');
+  ok('没有报错', JSON.stringify(await E('window.__errs'))==='[]', await E('window.__errs'));
   ok('no errors after the v2.0.2 section', JSON.stringify(await E('window.__errs'))==='[]', await E('window.__errs'));
 
   console.log('== teach video ==');

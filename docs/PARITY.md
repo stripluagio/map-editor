@@ -339,9 +339,22 @@ var c = mapType == MapType.angle45 ? 2 * i : i;   // i = MapRoadUtils.row
 - `EditorObjElement` 与 `EditorEventObjElement` 在原版里就是 `baseAttributes.concat([])`，
   一个字段都不加 —— 靠 `objName` / `assetsPath` 区分具体资源。
 - `EditorPropElement` 多三个字段：`isTreasure` / `itemId` / `itemNum`。
-- 原版的可选资源来自用户导入的 `MapEditorAssets` 目录；本项目还没有资源导入流程，
-  于是给这三类各配了几张内置占位图（内联 SVG，不占仓库体积），保证工具立刻可用。
-  这是**有意的差异**：皮肤不是原版素材，但字段结构是原版的。
+- 原版的可选资源来自用户导入的 `MapEditorAssets` 目录，开箱这三类是空的；
+  本项目给它们各配了几张内置占位图（内联 SVG，不占仓库体积），保证工具立刻可用。
+
+**导入编辑资源**已按原版的目录结构实现：
+
+| 项 | 原版 | 本项目 |
+| --- | --- | --- |
+| 根目录名 | `MapEditorAssets` / `mapAssets` / `MapAssets` | 同（大小写敏感） |
+| 类型子目录 | `NPC` / `Monster` / `Transfer` / `SpawnPoint` / `SceneObject` / `PropObject` / `EventObject` | 同（大小写不敏感） |
+| 资源名称 | `Presets/Presets.xlsx` 里配 | 文件名（去扩展名） |
+| 资源尺寸 | `Presets.xlsx` 里配 | 图片自然尺寸 |
+| 追加方式 | 进 `EditAssets` 预设库 | 追加在内置皮肤之后，`skin` 索引不错位 |
+
+`Presets.xlsx` 不解析，是有意简化：那张表是给美术流程用的，没有它也能正常工作。
+同一个类型重复导入是**覆盖**上一批，不会无限累加；图片是 `blob:` 对象 URL，
+刷新页面后需要重新导入（原版同样把资源放在内存里）。
 
 ### 4.3 地图原点（`alignment`）
 

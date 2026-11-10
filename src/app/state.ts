@@ -116,7 +116,7 @@ export class AppState {
    */
   shiftBrush = false;
   shiftBrushPrev = 0;
-  /** 导入编辑资源时扫到的图片文件名（预设规则导入尚未实现，见 app/io.ts）。 */
+  /** 导入编辑资源后生成的图片对象 URL（`blob:`，刷新即失效，见 app/io.ts）。 */
   importedAssets: string[] = [];
   /**
    * 原版 `GridLayer._isShowAuxiliaryLine` 默认是 `true`；本项目**故意默认关闭**，

@@ -1,4 +1,9 @@
 import { MapDataModel, buildMapData } from '../core/model';
+import { IMPORTED_SKINS, TYPE_LABEL, clearImportedSkins } from '../core/constants';
+import type { SkinDef } from '../core/constants';
+import type { EntityType } from '../core/types';
+import { loadEntitySprites } from './sprites';
+import { updateToolPanel } from '../ui/toolpanel';
 import { state } from './state';
 import { render } from '../render/canvas';
 import { toast } from '../ui/overlay';
@@ -134,14 +139,14 @@ export async function saveAsFile(): Promise<void> {
 /**
  * 导入编辑资源 —— v2.0.2 toolbar button.
  *
- * The original opens a folder picker, insists the root folder is named
- * `MapEditorAssets` / `mapAssets` / `MapAssets`, then reads every image into the
- * preset library so 放置物体 / 放置道具 / 放置事件 get real skins.
+ * 原版：选一个文件夹，根目录必须叫 `MapEditorAssets` / `mapAssets` / `MapAssets`；
+ * 里面按类型分子目录（`NPC` / `Monster` / `Transfer` / `SpawnPoint` /
+ * `SceneObject` / `PropObject` / `EventObject`），另有一个 `Presets/Presets.xlsx`
+ * 提供每个资源的名字与尺寸。
  *
- * We implement the picker, the exact name validation and the file scan, and keep
- * the result in `state.importedAssets`. Turning those images into selectable
- * skins needs the preset-rule UI (`ImportEditAssetsPresetsRuleView`), which is
- * still missing — so we say that out loud instead of pretending it worked.
+ * 本版：目录结构和根目录校验照抄，图片直接变成可选皮肤；`Presets.xlsx` 不解析，
+ * 名称取文件名、尺寸取图片自然尺寸。这是有意的简化 —— 原版那套预设规则表
+ * （`ImportEditAssetsPresetsRuleView`）是给美术流程用的，没有它也能正常工作。
  */
 export function importEditAssets(): void {
   const input = document.createElement('input');
@@ -157,17 +162,102 @@ export function importEditAssets(): void {
     if (!files.length) return;
     const root = String((files[0] as File & { webkitRelativePath?: string }).webkitRelativePath || '')
       .split('/')[0];
-    if (root !== 'MapEditorAssets' && root !== 'mapAssets' && root !== 'MapAssets') {
+    if (!ASSET_ROOTS.has(root)) {
       toast('上传本地资源只支持命名为 MapEditorAssets 或 mapAssets 或 MapAssets 的根文件目录');
       return;
     }
-    const images = files.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f.name));
-    state.importedAssets = images.map(f => f.name);
-    toast('已读取 ' + images.length + ' 张图片（' + root + '）。'
-        + '本版尚未实现「资源预设规则」导入，图片暂未进入可选皮肤列表');
+    void applyImportedAssets(files, root);
   });
   input.click();
 }
+
+/** 允许的根目录名（原版三个）。 */
+const ASSET_ROOTS = new Set(['MapEditorAssets', 'mapAssets', 'MapAssets']);
+
+/**
+ * 类型子目录 → 本项目的实体类型。
+ * 原版常量是 `NPC` / `Monster` / `Transfer` / `SpawnPoint` / `SceneObject` /
+ * `PropObject` / `EventObject`；这里大小写不敏感，也接受本项目自己的类型名。
+ */
+const ASSET_TYPE_BY_FOLDER: Record<string, EntityType> = {
+  npc: 'npc',
+  monster: 'monster',
+  transfer: 'transfer',
+  spawnpoint: 'spawnPoint',
+  sceneobject: 'obj',
+  propobject: 'prop',
+  eventobject: 'event',
+};
+
+const IMAGE_RE = /\.(png|jpe?g|webp|gif)$/i;
+
+/** 读一张图，只为拿自然尺寸；失败返回 null（坏图不该拖垮整次导入）。 */
+function imageSize(url: string): Promise<{ w: number; h: number } | null> {
+  return new Promise(resolve => {
+    const im = new Image();
+    im.onload = () => resolve({ w: im.naturalWidth || im.width, h: im.naturalHeight || im.height });
+    im.onerror = () => resolve(null);
+    im.src = url;
+  });
+}
+
+/**
+ * 把文件夹里的图片挂成可选皮肤。返回每个类型新增了多少张。
+ * 同一个类型重复导入时**覆盖**上一批（而不是无限累加）。
+ */
+export async function applyImportedAssets(
+  files: File[], root: string,
+): Promise<Record<string, number>> {
+  const added: Record<string, number> = {};
+  const urls: string[] = [];
+
+  // 先按类型分组
+  const groups = new Map<EntityType, File[]>();
+  for (const f of files) {
+    if (!IMAGE_RE.test(f.name)) continue;
+    const rel = String((f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name);
+    const parts = rel.split('/');
+    if (parts.length < 3) continue;                       // 必须 Root/Type/文件
+    const type = ASSET_TYPE_BY_FOLDER[parts[1].toLowerCase()];
+    if (!type) continue;                                  // Presets/ 之类直接跳过
+    const list = groups.get(type) || [];
+    list.push(f);
+    groups.set(type, list);
+  }
+
+  for (const [type, list] of groups) {
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    const defs: SkinDef[] = [];
+    for (const f of list) {
+      const url = URL.createObjectURL(f);
+      const size = await imageSize(url);
+      if (!size) { URL.revokeObjectURL(url); continue; }
+      urls.push(url);
+      const name = f.name.replace(/\.[^.]+$/, '');
+      defs.push({ label: name, icon: url, objName: name, w: size.w, h: size.h });
+    }
+    if (!defs.length) continue;
+    // 覆盖这一类的导入皮肤（内置的仍在前面，索引不受影响）
+    clearImportedSkins(type);
+    IMPORTED_SKINS[type] = defs;
+    added[type] = defs.length;
+  }
+
+  if (urls.length) {
+    loadEntitySprites();
+    state.importedAssets = urls;
+    updateToolPanel();
+    render();
+    const summary = Object.entries(added)
+      .map(([t, n]) => TYPE_LABEL[t] + ' ' + n).join('、');
+    toast('已导入 ' + urls.length + ' 张图片（' + root + '）：' + summary);
+  } else {
+    toast('在 ' + root + ' 里没找到可用的图片。'
+        + '请按 MapEditorAssets/NPC/xxx.png 这样的「根目录/类型/图片」结构放文件');
+  }
+  return added;
+}
+
 /** 地图切片导出（ctrl + W）— full-size map image, no editor overlays. */
 export function exportTiles(): void {
   const p = state.params;
